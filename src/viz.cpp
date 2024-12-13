@@ -583,8 +583,8 @@ WGPURequiredLimits Viz::requiredLimits(WGPUAdapter adapter) const
 
 	required.limits.maxBindGroups = 2;
 
-	required.limits.maxBufferSize               = 2'147'483'647;
-	required.limits.maxStorageBufferBindingSize = 134'217'728;
+	required.limits.maxBufferSize               = 2'147'483'648;
+	required.limits.maxStorageBufferBindingSize = 2'147'483'648;
 
 	required.limits.maxComputeWorkgroupSizeX          = 32;
 	required.limits.maxComputeWorkgroupSizeY          = 4;
