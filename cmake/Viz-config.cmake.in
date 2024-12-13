@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+# Depends on Compute, Geometry, Math, Vision components
+# FIXME: This is a bit hacky
+include("${CMAKE_CURRENT_LIST_DIR}/Compute-config.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Math-config.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Vision-config.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/Viz-targets.cmake")

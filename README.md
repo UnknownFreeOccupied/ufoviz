@@ -1,2 +1,2 @@
 # ufoviz
-The UFO visualizer
+The UFO viz library
