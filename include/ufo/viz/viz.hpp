@@ -80,14 +80,10 @@ class Viz
 	void start(bool                seperate_thread  = true,
 	           WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
-	void update();
-
-	// A function called at each frame, guaranteed never to be called before
-	// `start`.
-	void onFrame();
-
 	// A function called only once at the very end.
 	void stop();
+
+	void update();
 
 	// A function that tells if the application is still running.
 	[[nodiscard]] bool running() const;
@@ -103,6 +99,10 @@ class Viz
 	void saveConfig() const;
 
  private:
+	void init(WGPUPowerPreference power_preference);
+
+	void run();
+
 	[[nodiscard]] GLFWwindow* createWindow() const;
 
 	[[nodiscard]] WGPUInstance createInstance() const;
@@ -125,8 +125,6 @@ class Viz
 	    WGPUSurfaceCapabilities surface_capabilities) const;
 
 	[[nodiscard]] WGPURequiredLimits requiredLimits(WGPUAdapter adapter) const;
-
-	void loop() const;
 
 	void updateGui(WGPURenderPassEncoder render_pass);
 

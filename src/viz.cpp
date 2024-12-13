@@ -61,7 +61,7 @@ Viz::Viz(std::string const& window_name, bool start, bool seperate_thread,
          WGPUPowerPreference power_preference)
 {
 	if (start) {
-		this->start(seperate_thread);
+		this->start(seperate_thread, power_preference);
 	}
 
 	// TODO: Load config
@@ -75,36 +75,10 @@ void Viz::start(bool seperate_thread, WGPUPowerPreference power_preference)
 		return;
 	}
 
-	surface_config_.width  = 640;
-	surface_config_.height = 480;
-
-	if (GLFW_TRUE != glfwInit()) {
-		// TODO: Throw
-	}
-
-	auto setup = [this, power_preference]() {
-		instance_             = createInstance();
-		window_               = createWindow();
-		surface_              = createSurface(instance_, window_);
-		adapter_              = createAdapter(instance_, surface_, power_preference);
-		device_               = createDevice(adapter_);
-		queue_                = createQueue(device_);
-		surface_capabilities_ = createSurfaceCapabilities(surface_, adapter_);
-		surface_config_ = createSurfaceConfiguration(window_, device_, surface_capabilities_);
-
-		wgpuSurfaceConfigure(surface_, &surface_config_);
-	};
+	init(power_preference);
 
 	if (seperate_thread) {
-		render_thread_ = std::thread([this, setup] {
-			setup();
-
-			while (running()) {
-				onFrame();
-			}
-		});
-	} else {
-		setup();
+		render_thread_ = std::thread(&Viz::run, this);
 	}
 
 	// TODO: Implement
@@ -112,6 +86,10 @@ void Viz::start(bool seperate_thread, WGPUPowerPreference power_preference)
 
 void Viz::stop()
 {
+	if (render_thread_.joinable()) {
+		render_thread_.join();
+	}
+
 	// TODO: Implement
 
 	wgpuSurfaceCapabilitiesFreeMembers(surface_capabilities_);
@@ -126,7 +104,105 @@ void Viz::stop()
 
 void Viz::update()
 {
-	// TODO: Implement
+	glfwPollEvents();
+
+	WGPUSurfaceTexture surface_texture;
+	wgpuSurfaceGetCurrentTexture(surface_, &surface_texture);
+	switch (surface_texture.status) {
+		case WGPUSurfaceGetCurrentTextureStatus_Success:
+			// All good, could check for `surface_texture.suboptimal` here.
+			break;
+		case WGPUSurfaceGetCurrentTextureStatus_Timeout:
+		case WGPUSurfaceGetCurrentTextureStatus_Outdated:
+		case WGPUSurfaceGetCurrentTextureStatus_Lost: {
+			// Skip this frame, and re-configure surface.
+			if (nullptr != surface_texture.texture) {
+				wgpuTextureRelease(surface_texture.texture);
+			}
+			int width, height;
+			glfwGetWindowSize(window_, &width, &height);
+			if (0 != width && 0 != height) {
+				surface_config_.width  = width;
+				surface_config_.height = height;
+				wgpuSurfaceConfigure(surface_, &surface_config_);
+			}
+			return;
+		}
+		case WGPUSurfaceGetCurrentTextureStatus_OutOfMemory:
+		case WGPUSurfaceGetCurrentTextureStatus_DeviceLost:
+		case WGPUSurfaceGetCurrentTextureStatus_Force32:
+			// Fatal error
+			printf("get_current_texture status=%#.8x\n", surface_texture.status);
+			abort();
+	}
+	assert(surface_texture.texture);
+
+	// Create a view for this surface texture
+	WGPUTextureViewDescriptor view_desc;
+	view_desc.nextInChain     = nullptr;
+	view_desc.label           = (window_name_ + " Surface Texture View").c_str();
+	view_desc.format          = wgpuTextureGetFormat(surface_texture.texture);
+	view_desc.dimension       = WGPUTextureViewDimension_2D;
+	view_desc.baseMipLevel    = 0;
+	view_desc.mipLevelCount   = 1;
+	view_desc.baseArrayLayer  = 0;
+	view_desc.arrayLayerCount = 1;
+	view_desc.aspect          = WGPUTextureAspect_All;
+
+	WGPUTextureView frame = wgpuTextureCreateView(surface_texture.texture, &view_desc);
+	assert(frame);
+
+	WGPUCommandEncoderDescriptor command_encoder_desc{};
+	command_encoder_desc.nextInChain = nullptr;
+	command_encoder_desc.label       = "command_encoder";
+
+	WGPUCommandEncoder command_encoder =
+	    wgpuDeviceCreateCommandEncoder(device_, &command_encoder_desc);
+	assert(command_encoder);
+
+	WGPURenderPassDescriptor render_pass_desc{};
+	render_pass_desc.label                = "render_pass_encoder";
+	render_pass_desc.colorAttachmentCount = 1;
+
+	WGPURenderPassColorAttachment render_pass_color_attachment{};
+	render_pass_color_attachment.view          = frame;
+	render_pass_color_attachment.resolveTarget = nullptr;
+	render_pass_color_attachment.loadOp        = WGPULoadOp_Clear;
+	render_pass_color_attachment.storeOp       = WGPUStoreOp_Store;
+	render_pass_color_attachment.depthSlice    = WGPU_DEPTH_SLICE_UNDEFINED;
+	render_pass_color_attachment.clearValue    = WGPUColor{0.0, 0.0, 0.0, 1.0};
+
+	render_pass_desc.colorAttachments = &render_pass_color_attachment;
+
+	WGPURenderPassEncoder render_pass_encoder =
+	    wgpuCommandEncoderBeginRenderPass(command_encoder, &render_pass_desc);
+	assert(render_pass_encoder);
+
+	wgpuRenderPassEncoderEnd(render_pass_encoder);
+	wgpuRenderPassEncoderRelease(render_pass_encoder);
+
+	{
+		std::scoped_lock lock(renderables_mutex_);
+		for (Renderable const* renderable : renderables_) {
+			// TODO: Call render on renderable
+		}
+	}
+
+	WGPUCommandBufferDescriptor command_buffer_desc{};
+	command_buffer_desc.nextInChain = nullptr;
+	command_buffer_desc.label       = "command_buffer";
+
+	WGPUCommandBuffer command_buffer =
+	    wgpuCommandEncoderFinish(command_encoder, &command_buffer_desc);
+	assert(command_buffer);
+
+	wgpuQueueSubmit(queue_, 1, &command_buffer);
+	wgpuSurfacePresent(surface_);
+
+	wgpuCommandBufferRelease(command_buffer);
+	wgpuCommandEncoderRelease(command_encoder);
+	wgpuTextureViewRelease(frame);
+	wgpuTextureRelease(surface_texture.texture);
 }
 
 bool Viz::running() const
@@ -166,6 +242,34 @@ void Viz::loadConfig()
 void Viz::saveConfig() const
 {
 	// TODO: Implement
+}
+
+void Viz::init(WGPUPowerPreference power_preference)
+{
+	surface_config_.width  = 640;
+	surface_config_.height = 480;
+
+	if (GLFW_TRUE != glfwInit()) {
+		// TODO: Throw
+	}
+
+	instance_             = createInstance();
+	window_               = createWindow();
+	surface_              = createSurface(instance_, window_);
+	adapter_              = createAdapter(instance_, surface_, power_preference);
+	device_               = createDevice(adapter_);
+	queue_                = createQueue(device_);
+	surface_capabilities_ = createSurfaceCapabilities(surface_, adapter_);
+	surface_config_ = createSurfaceConfiguration(window_, device_, surface_capabilities_);
+
+	wgpuSurfaceConfigure(surface_, &surface_config_);
+}
+
+void Viz::run()
+{
+	while (running()) {
+		update();
+	}
 }
 
 GLFWwindow* Viz::createWindow() const
@@ -517,109 +621,6 @@ WGPURequiredLimits Viz::requiredLimits(WGPUAdapter adapter) const
 	// required.limits.maxUniformBufferBindingSize = 16 * 4;
 
 	return required;
-}
-
-void Viz::onFrame()
-{
-	glfwPollEvents();
-
-	WGPUSurfaceTexture surface_texture;
-	wgpuSurfaceGetCurrentTexture(surface_, &surface_texture);
-	switch (surface_texture.status) {
-		case WGPUSurfaceGetCurrentTextureStatus_Success:
-			// All good, could check for `surface_texture.suboptimal` here.
-			break;
-		case WGPUSurfaceGetCurrentTextureStatus_Timeout:
-		case WGPUSurfaceGetCurrentTextureStatus_Outdated:
-		case WGPUSurfaceGetCurrentTextureStatus_Lost: {
-			// Skip this frame, and re-configure surface.
-			if (nullptr != surface_texture.texture) {
-				wgpuTextureRelease(surface_texture.texture);
-			}
-			int width, height;
-			glfwGetWindowSize(window_, &width, &height);
-			if (0 != width && 0 != height) {
-				surface_config_.width  = width;
-				surface_config_.height = height;
-				wgpuSurfaceConfigure(surface_, &surface_config_);
-			}
-			return;
-		}
-		case WGPUSurfaceGetCurrentTextureStatus_OutOfMemory:
-		case WGPUSurfaceGetCurrentTextureStatus_DeviceLost:
-		case WGPUSurfaceGetCurrentTextureStatus_Force32:
-			// Fatal error
-			printf("get_current_texture status=%#.8x\n", surface_texture.status);
-			abort();
-	}
-	assert(surface_texture.texture);
-
-	// Create a view for this surface texture
-	WGPUTextureViewDescriptor view_desc;
-	view_desc.nextInChain     = nullptr;
-	view_desc.label           = (window_name_ + " Surface Texture View").c_str();
-	view_desc.format          = wgpuTextureGetFormat(surface_texture.texture);
-	view_desc.dimension       = WGPUTextureViewDimension_2D;
-	view_desc.baseMipLevel    = 0;
-	view_desc.mipLevelCount   = 1;
-	view_desc.baseArrayLayer  = 0;
-	view_desc.arrayLayerCount = 1;
-	view_desc.aspect          = WGPUTextureAspect_All;
-
-	WGPUTextureView frame = wgpuTextureCreateView(surface_texture.texture, &view_desc);
-	assert(frame);
-
-	WGPUCommandEncoderDescriptor command_encoder_desc{};
-	command_encoder_desc.nextInChain = nullptr;
-	command_encoder_desc.label       = "command_encoder";
-
-	WGPUCommandEncoder command_encoder =
-	    wgpuDeviceCreateCommandEncoder(device_, &command_encoder_desc);
-	assert(command_encoder);
-
-	WGPURenderPassDescriptor render_pass_desc{};
-	render_pass_desc.label                = "render_pass_encoder";
-	render_pass_desc.colorAttachmentCount = 1;
-
-	WGPURenderPassColorAttachment render_pass_color_attachment{};
-	render_pass_color_attachment.view          = frame;
-	render_pass_color_attachment.resolveTarget = nullptr;
-	render_pass_color_attachment.loadOp        = WGPULoadOp_Clear;
-	render_pass_color_attachment.storeOp       = WGPUStoreOp_Store;
-	render_pass_color_attachment.depthSlice    = WGPU_DEPTH_SLICE_UNDEFINED;
-	render_pass_color_attachment.clearValue    = WGPUColor{0.0, 0.0, 0.0, 1.0};
-
-	render_pass_desc.colorAttachments = &render_pass_color_attachment;
-
-	WGPURenderPassEncoder render_pass_encoder =
-	    wgpuCommandEncoderBeginRenderPass(command_encoder, &render_pass_desc);
-	assert(render_pass_encoder);
-
-	wgpuRenderPassEncoderEnd(render_pass_encoder);
-	wgpuRenderPassEncoderRelease(render_pass_encoder);
-
-	{
-		std::scoped_lock lock(renderables_mutex_);
-		for (Renderable const* renderable : renderables_) {
-			// TODO: Call render on renderable
-		}
-	}
-
-	WGPUCommandBufferDescriptor command_buffer_desc{};
-	command_buffer_desc.nextInChain = nullptr;
-	command_buffer_desc.label       = "command_buffer";
-
-	WGPUCommandBuffer command_buffer =
-	    wgpuCommandEncoderFinish(command_encoder, &command_buffer_desc);
-	assert(command_buffer);
-
-	wgpuQueueSubmit(queue_, 1, &command_buffer);
-	wgpuSurfacePresent(surface_);
-
-	wgpuCommandBufferRelease(command_buffer);
-	wgpuCommandEncoderRelease(command_encoder);
-	wgpuTextureViewRelease(frame);
-	wgpuTextureRelease(surface_texture.texture);
 }
 
 void Viz::onMouseMove(double x_pos, double y_pos)

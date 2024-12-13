@@ -9,11 +9,12 @@ using namespace ufo;
 
 TEST_CASE("Viz")
 {
-	Viz v("UFOViz", true, false);
+	using namespace std::chrono_literals;
+
+	Viz v("UFOViz", true, true);
 
 	while (v.running()) {
-		v.onFrame();
-		// using namespace std::chrono_literals;
-		// std::this_thread::sleep_for(100ms);
+		// v.update();
+		std::this_thread::sleep_for(100ms);
 	}
 }
