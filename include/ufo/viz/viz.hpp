@@ -83,6 +83,8 @@ class Viz
 	// A function called only once at the very end.
 	void stop();
 
+	void run();
+
 	void update();
 
 	// A function that tells if the application is still running.
@@ -101,28 +103,16 @@ class Viz
  private:
 	void init(WGPUPowerPreference power_preference);
 
-	void run();
-
 	[[nodiscard]] GLFWwindow* createWindow() const;
-
-	[[nodiscard]] WGPUInstance createInstance() const;
 
 	[[nodiscard]] WGPUSurface createSurface(WGPUInstance instance,
 	                                        GLFWwindow*  window) const;
 
-	[[nodiscard]] WGPUAdapter createAdapter(WGPUInstance instance, WGPUSurface surface,
-	                                        WGPUPowerPreference power_preference) const;
+	[[nodiscard]] WGPUSurfaceCapabilities surfaceCapabilities(WGPUSurface surface,
+	                                                          WGPUAdapter adapter) const;
 
-	[[nodiscard]] WGPUDevice createDevice(WGPUAdapter adapter) const;
-
-	[[nodiscard]] WGPUQueue createQueue(WGPUDevice device) const;
-
-	[[nodiscard]] WGPUSurfaceCapabilities createSurfaceCapabilities(
-	    WGPUSurface surface, WGPUAdapter adapter) const;
-
-	[[nodiscard]] WGPUSurfaceConfiguration createSurfaceConfiguration(
-	    GLFWwindow* window, WGPUDevice device,
-	    WGPUSurfaceCapabilities surface_capabilities) const;
+	[[nodiscard]] WGPUSurfaceConfiguration surfaceConfiguration(
+	    GLFWwindow* window, WGPUDevice device, WGPUSurfaceCapabilities capabilities) const;
 
 	[[nodiscard]] WGPURequiredLimits requiredLimits(WGPUAdapter adapter) const;
 
@@ -140,14 +130,6 @@ class Viz
 
 	void onKey(int key, int scancode, int action, int mods);
 
-	WGPUTextureView nextSurfaceTextureView();
-
-	void initRenderPipeline();
-
-	void initTexture(std::uint32_t width, std::uint32_t height);
-
-	void initRenderBindGroups();
-
 	void initGui();
 
  private:
@@ -155,16 +137,18 @@ class Viz
 
 	std::string window_name_ = "UFOViz";
 
-	WGPUInstance            instance_ = nullptr;
-	WGPUSurface             surface_  = nullptr;
-	WGPUAdapter             adapter_  = nullptr;
-	WGPUDevice              device_   = nullptr;
-	WGPUQueue               queue_    = nullptr;
-	WGPUSurfaceCapabilities surface_capabilities_;
+	WGPUInstance instance_ = nullptr;
+	WGPUSurface  surface_  = nullptr;
+	WGPUAdapter  adapter_  = nullptr;
+	WGPUDevice   device_   = nullptr;
+	WGPUQueue    queue_    = nullptr;
 
+	WGPUSurfaceCapabilities  surface_capa_;
 	WGPUSurfaceConfiguration surface_config_;
 
 	std::thread render_thread_;
+
+	float prev_time_{};
 
 	std::mutex                  renderables_mutex_;
 	std::set<Renderable const*> renderables_;

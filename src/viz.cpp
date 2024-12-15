@@ -40,6 +40,7 @@
  */
 
 // UFO
+#include <ufo/compute/compute.hpp>
 #include <ufo/viz/load_shader_module.hpp>
 #include <ufo/viz/viz.hpp>
 
@@ -92,7 +93,7 @@ void Viz::stop()
 
 	// TODO: Implement
 
-	wgpuSurfaceCapabilitiesFreeMembers(surface_capabilities_);
+	wgpuSurfaceCapabilitiesFreeMembers(surface_capa_);
 	wgpuQueueRelease(queue_);
 	wgpuDeviceRelease(device_);
 	wgpuAdapterRelease(adapter_);
@@ -102,9 +103,19 @@ void Viz::stop()
 	glfwTerminate();
 }
 
+void Viz::run()
+{
+	while (running()) {
+		update();
+	}
+}
+
 void Viz::update()
 {
 	glfwPollEvents();
+	float new_time   = glfwGetTime();
+	float delta_time = new_time - prev_time_;
+	prev_time_       = new_time;
 
 	WGPUSurfaceTexture surface_texture;
 	wgpuSurfaceGetCurrentTexture(surface_, &surface_texture);
@@ -253,23 +264,17 @@ void Viz::init(WGPUPowerPreference power_preference)
 		// TODO: Throw
 	}
 
-	instance_             = createInstance();
-	window_               = createWindow();
-	surface_              = createSurface(instance_, window_);
-	adapter_              = createAdapter(instance_, surface_, power_preference);
-	device_               = createDevice(adapter_);
-	queue_                = createQueue(device_);
-	surface_capabilities_ = createSurfaceCapabilities(surface_, adapter_);
-	surface_config_ = createSurfaceConfiguration(window_, device_, surface_capabilities_);
+	instance_            = compute::createInstance();
+	window_              = createWindow();
+	surface_             = createSurface(instance_, window_);
+	adapter_             = compute::createAdapter(instance_, surface_, power_preference);
+	auto required_limits = requiredLimits(adapter_);
+	device_              = compute::createDevice(adapter_, required_limits);
+	queue_               = compute::queue(device_);
+	surface_capa_        = surfaceCapabilities(surface_, adapter_);
+	surface_config_      = surfaceConfiguration(window_, device_, surface_capa_);
 
 	wgpuSurfaceConfigure(surface_, &surface_config_);
-}
-
-void Viz::run()
-{
-	while (running()) {
-		update();
-	}
 }
 
 GLFWwindow* Viz::createWindow() const
@@ -335,8 +340,6 @@ GLFWwindow* Viz::createWindow() const
 	return window;
 }
 
-WGPUInstance Viz::createInstance() const { return wgpuCreateInstance(nullptr); }
-
 WGPUSurface Viz::createSurface(WGPUInstance instance, GLFWwindow* window) const
 {
 	WGPUSurfaceDescriptor desc{};
@@ -394,128 +397,24 @@ WGPUSurface Viz::createSurface(WGPUInstance instance, GLFWwindow* window) const
 	return wgpuInstanceCreateSurface(instance, &desc);
 }
 
-WGPUAdapter Viz::createAdapter(WGPUInstance instance, WGPUSurface surface,
-                               WGPUPowerPreference power_preference) const
-{
-	struct UserData {
-		WGPUAdapter adapter       = nullptr;
-		bool        request_ended = false;
-	} user_data{};
-
-	WGPURequestAdapterOptions options{};
-	options.nextInChain       = nullptr;
-	options.powerPreference   = power_preference;
-	options.compatibleSurface = surface;
-	// options.backendType          = WGPUBackendType_Undefined;
-	// options.forceFallbackAdapter = false;
-
-	auto callback = [](WGPURequestAdapterStatus status, WGPUAdapter adapter,
-	                   char const* message, void* user_data) {
-		UserData& data = *static_cast<UserData*>(user_data);
-		if (WGPURequestAdapterStatus_Success == status) {
-			data.adapter = adapter;
-		} else {
-			std::cerr << "Could not get WebGPU adapter: " << message << std::endl;
-		}
-		data.request_ended = true;
-	};
-
-	wgpuInstanceRequestAdapter(instance, &options, callback,
-	                           static_cast<void*>(&user_data));
-
-	// We wait until user_data.request_ended gets true
-#ifdef __EMSCRIPTEN__
-	while (!user_data.request_ended) {
-		emscripten_sleep(100);
-	}
-#endif  // __EMSCRIPTEN__
-
-	assert(user_data.request_ended);
-	assert(nullptr != user_data.adapter);
-
-	return user_data.adapter;
-}
-
-WGPUDevice Viz::createDevice(WGPUAdapter adapter) const
-{
-	struct UserData {
-		WGPUDevice device        = nullptr;
-		bool       request_ended = false;
-	} user_data{};
-
-	WGPUDeviceDescriptor desc{};
-	desc.nextInChain = nullptr;
-	desc.label       = (window_name_ + " Device").c_str();
-	// desc.requiredFeatureCount = 0;
-	// desc.requiredFeatures     = nullptr;
-
-	WGPURequiredLimits required_limits = requiredLimits(adapter);
-	desc.requiredLimits                = &required_limits;
-
-	desc.defaultQueue.nextInChain = nullptr;
-	desc.defaultQueue.label       = (window_name_ + " Default Queue").c_str();
-
-	desc.deviceLostUserdata = nullptr;
-	desc.deviceLostCallback = [](WGPUDeviceLostReason reason, char const* message,
-	                             void* /* pUserData */) {
-		std::cout << "Device lost: reason " << reason;
-		if (message) {
-			std::cout << " (" << message << ")";
-		}
-		std::cout << std::endl;
-	};
-
-	// desc.uncapturedErrorCallbackInfo.nextInChain = nullptr;
-	// desc.uncapturedErrorCallbackInfo.userdata    = nullptr;
-	// desc.uncapturedErrorCallbackInfo.callback    = nullptr;
-
-	auto callback = [](WGPURequestDeviceStatus status, WGPUDevice device,
-	                   char const* message, void* user_data) {
-		UserData& data = *static_cast<UserData*>(user_data);
-		if (WGPURequestDeviceStatus_Success == status) {
-			data.device = device;
-		} else {
-			std::cout << "Could not get WebGPU device: " << message << std::endl;
-		}
-		data.request_ended = true;
-	};
-
-	wgpuAdapterRequestDevice(adapter, &desc, callback, static_cast<void*>(&user_data));
-
-	// We wait until user_data.request_ended gets true
-#ifdef __EMSCRIPTEN__
-	while (!user_data.request_ended) {
-		emscripten_sleep(100);
-	}
-#endif  // __EMSCRIPTEN__
-
-	assert(user_data.request_ended);
-	assert(nullptr != user_data.device);
-
-	return user_data.device;
-}
-
-WGPUQueue Viz::createQueue(WGPUDevice device) const { return wgpuDeviceGetQueue(device); }
-
-WGPUSurfaceCapabilities Viz::createSurfaceCapabilities(WGPUSurface surface,
-                                                       WGPUAdapter adapter) const
+WGPUSurfaceCapabilities Viz::surfaceCapabilities(WGPUSurface surface,
+                                                 WGPUAdapter adapter) const
 {
 	WGPUSurfaceCapabilities surface_capabilities{};
 	wgpuSurfaceGetCapabilities(surface, adapter, &surface_capabilities);
 	return surface_capabilities;
 }
 
-WGPUSurfaceConfiguration Viz::createSurfaceConfiguration(
-    GLFWwindow* window, WGPUDevice device,
-    WGPUSurfaceCapabilities surface_capabilities) const
+WGPUSurfaceConfiguration Viz::surfaceConfiguration(
+    GLFWwindow* window, WGPUDevice device, WGPUSurfaceCapabilities capabilities) const
 {
 	WGPUSurfaceConfiguration config{};
 	config.nextInChain = nullptr;
 	config.device      = device;
 	config.usage       = WGPUTextureUsage_RenderAttachment;
-	config.format      = surface_capabilities.formats[0];
+	config.format      = capabilities.formats[0];
 	config.presentMode = WGPUPresentMode_Fifo;
-	config.alphaMode   = surface_capabilities.alphaModes[0];
+	config.alphaMode   = capabilities.alphaModes[0];
 
 	// config.viewFormatCount = 0;
 	// config.viewFormats     = nullptr;
@@ -540,39 +439,7 @@ WGPURequiredLimits Viz::requiredLimits(WGPUAdapter adapter) const
 	wgpuAdapterGetLimits(adapter, &supported);
 
 	WGPURequiredLimits required{};
-	// Defaults
-	required.limits.maxTextureDimension1D                     = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxTextureDimension2D                     = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxTextureDimension3D                     = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxTextureArrayLayers                     = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxBindGroups                             = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxBindGroupsPlusVertexBuffers            = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxBindingsPerBindGroup                   = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxSampledTexturesPerShaderStage          = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxSamplersPerShaderStage                 = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxStorageBuffersPerShaderStage           = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxStorageTexturesPerShaderStage          = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxUniformBuffersPerShaderStage           = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxUniformBufferBindingSize               = WGPU_LIMIT_U64_UNDEFINED;
-	required.limits.maxStorageBufferBindingSize               = WGPU_LIMIT_U64_UNDEFINED;
-	required.limits.minUniformBufferOffsetAlignment           = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.minStorageBufferOffsetAlignment           = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxVertexBuffers                          = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxBufferSize                             = WGPU_LIMIT_U64_UNDEFINED;
-	required.limits.maxVertexAttributes                       = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxVertexBufferArrayStride                = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxInterStageShaderComponents             = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxInterStageShaderVariables              = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxColorAttachments                       = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxColorAttachmentBytesPerSample          = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeWorkgroupStorageSize            = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeInvocationsPerWorkgroup         = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeWorkgroupSizeX                  = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeWorkgroupSizeY                  = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeWorkgroupSizeZ                  = WGPU_LIMIT_U32_UNDEFINED;
-	required.limits.maxComputeWorkgroupsPerDimension          = WGPU_LIMIT_U32_UNDEFINED;
+	compute::setDefault(required.limits);
 
 	// These two limits are different because they are "minimum" limits,
 	// they are the only ones we may forward from the adapter's supported limits.
