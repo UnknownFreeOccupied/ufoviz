@@ -48,18 +48,17 @@ int main()
 
 	Viz v("UFOViz", true, false);
 
-#ifdef __EMSCRIPTEN__
-	// Equivalent of the main loop when using Emscripten:
+#if defined(__EMSCRIPTEN__)
 	auto callback = [](void* arg) {
-		Viz* v = reinterpret_cast<Viz*>(arg);
+		Viz* v = static_cast<Viz*>(arg);
 		v->update();
 	};
 	emscripten_set_main_loop_arg(callback, &app, 0, true);
-#else   // __EMSCRIPTEN__
+#else
 	while (v.running()) {
 		v.update();
 	}
-#endif  // __EMSCRIPTEN__
+#endif
 
 	v.stop();
 
