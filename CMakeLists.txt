@@ -4,7 +4,9 @@ option(UFOVIZ_BUILD_COVERAGE "Test Coverage"          OFF)
 
 add_subdirectory(apps)
 
-add_library(Viz 
+add_subdirectory(glfw_webgpu)
+
+add_library(Viz
 	src/load_shader_module.cpp
 	src/viz.cpp
 )
@@ -43,17 +45,20 @@ if (WIN32)
 		PRIVATE
 			GLFW_EXPOSE_NATIVE_WIN32
 	)
+	set(OS_LIBRARIES d3dcompiler ws2_32 userenv bcrypt ntdll opengl32)
 elseif(UNIX AND NOT APPLE)
 	target_compile_definitions(Viz
 		PRIVATE
 			GLFW_EXPOSE_NATIVE_X11
 			GLFW_EXPOSE_NATIVE_WAYLAND
 	)
+	set(OS_LIBRARIES "-lm -ldl")
 elseif(APPLE)
 	target_compile_definitions(Viz
 		PRIVATE
 			GLFW_EXPOSE_NATIVE_COCOA
 	)
+	set(OS_LIBRARIES "-framework CoreFoundation -framework QuartzCore -framework Metal")
 endif()
 
 # add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/imgui")
@@ -66,6 +71,8 @@ target_link_libraries(Viz
 		# imgui
 	PRIVATE
 		glfw
+		glfw_webgpu
+		${OS_LIBRARIES}
 )
 
 include(GNUInstallDirs)
@@ -84,7 +91,7 @@ if(UFO_BUILD_DOCS OR UFOVIZ_BUILD_DOCS)
 	add_subdirectory(docs)
 endif()
 
-install(TARGETS Viz EXPORT Viz-targets
+install(TARGETS Viz glfw_webgpu EXPORT Viz-targets
 	COMPONENT Viz
 	LIBRARY  DESTINATION lib
 	ARCHIVE  DESTINATION lib

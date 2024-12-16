@@ -44,15 +44,13 @@
 
 // UFO
 #include <ufo/viz/renderable.hpp>
+#include <ufo/compute/compute.hpp>
 
 // STL
 #include <mutex>
 #include <set>
 #include <string>
 #include <thread>
-
-// WebGPU
-#include <webgpu/webgpu.h>
 
 // EMSCRIPTEN
 #ifdef __EMSCRIPTEN__
@@ -103,9 +101,6 @@ class Viz
 	void init(WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
 	[[nodiscard]] GLFWwindow* createWindow() const;
-
-	[[nodiscard]] WGPUSurface createSurface(WGPUInstance instance,
-	                                        GLFWwindow*  window) const;
 
 	[[nodiscard]] WGPUSurfaceCapabilities surfaceCapabilities(WGPUSurface surface,
 	                                                          WGPUAdapter adapter) const;
