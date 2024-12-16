@@ -57,31 +57,34 @@
 
 namespace ufo
 {
-Viz::Viz(std::string const& window_name, bool start, bool seperate_thread,
+Viz::Viz(std::string const& window_name, VizLaunch policy,
          WGPUPowerPreference power_preference)
+    : window_name_(window_name)
 {
-	if (start) {
-		this->start(seperate_thread, power_preference);
-	}
-
 	// TODO: Load config
+
+	if (VizLaunch::DEFERRED != policy) {
+		start(policy, power_preference);
+	}
 }
 
 Viz::~Viz() { stop(); }
 
-void Viz::start(bool seperate_thread, WGPUPowerPreference power_preference)
+void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference)
 {
 	if (running()) {
 		return;
 	}
 
-	init(power_preference);
-
-	if (seperate_thread) {
-		render_thread_ = std::thread(&Viz::run, this);
+	if (nullptr == device_) {
+		init(power_preference);
 	}
 
-	// TODO: Implement
+	if (VizLaunch::RUN == policy) {
+		run();
+	} else if (VizLaunch::ASYNC == policy) {
+		render_thread_ = std::thread(&Viz::run, this);
+	}
 }
 
 void Viz::stop()
@@ -104,11 +107,9 @@ void Viz::stop()
 	glfwTerminate();
 }
 
-void Viz::run()
+bool Viz::running() const
 {
-	while (running()) {
-		update();
-	}
+	return nullptr != window_ && !glfwWindowShouldClose(window_);
 }
 
 void Viz::update()
@@ -217,11 +218,6 @@ void Viz::update()
 	wgpuTextureRelease(surface_texture.texture);
 }
 
-bool Viz::running() const
-{
-	return nullptr != window_ && !glfwWindowShouldClose(window_);
-}
-
 void Viz::addRenderable(Renderable const& renderable)
 {
 	// TODO: Should this init something?
@@ -254,6 +250,21 @@ void Viz::loadConfig()
 void Viz::saveConfig() const
 {
 	// TODO: Implement
+}
+
+void Viz::run()
+{
+#if defined(__EMSCRIPTEN__)
+	auto callback = [](void* arg) {
+		Viz* v = static_cast<Viz*>(arg);
+		v->update();
+	};
+	emscripten_set_main_loop_arg(callback, this, 0, true);
+#else
+	while (running()) {
+		update();
+	}
+#endif
 }
 
 void Viz::init(WGPUPowerPreference power_preference)

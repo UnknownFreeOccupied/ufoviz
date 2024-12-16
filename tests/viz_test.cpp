@@ -11,7 +11,7 @@ TEST_CASE("Viz")
 {
 	using namespace std::chrono_literals;
 
-	Viz v("UFOViz", true, true);
+	Viz v("UFOViz");
 
 	while (v.running()) {
 		// v.update();

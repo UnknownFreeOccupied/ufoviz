@@ -67,28 +67,25 @@ struct GLFWwindow;
 
 namespace ufo
 {
+enum class VizLaunch { ASYNC, RUN, ONLY_START, DEFERRED };
+
 class Viz
 {
  public:
-	Viz(std::string const& window_name = "UFOViz", bool start = true,
-	    bool                seperate_thread  = true,
+	Viz(std::string const& window_name = "UFOViz", VizLaunch policy = VizLaunch::ASYNC,
 	    WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
 	~Viz();
 
-	// A function called only once at the beginning. Returns false if init failed.
-	void start(bool                seperate_thread  = true,
+	void start(VizLaunch           policy           = VizLaunch::ASYNC,
 	           WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
-	// A function called only once at the very end.
 	void stop();
-
-	void run();
+	
+	[[nodiscard]] bool running() const;
 
 	void update();
 
-	// A function that tells if the application is still running.
-	[[nodiscard]] bool running() const;
 
 	void addRenderable(Renderable const& renderable);
 
@@ -101,7 +98,9 @@ class Viz
 	void saveConfig() const;
 
  private:
-	void init(WGPUPowerPreference power_preference);
+	void run();
+
+	void init(WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
 	[[nodiscard]] GLFWwindow* createWindow() const;
 

@@ -42,25 +42,12 @@
 // UFO
 #include <ufo/viz/viz.hpp>
 
-int main()
+// STL
+#include <cstdlib>
+
+int main(int /* argc */, char* /* argv */[])
 {
-	using namespace ufo;
+	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN);
 
-	Viz v("UFOViz", true, false);
-
-#if defined(__EMSCRIPTEN__)
-	auto callback = [](void* arg) {
-		Viz* v = static_cast<Viz*>(arg);
-		v->update();
-	};
-	emscripten_set_main_loop_arg(callback, &app, 0, true);
-#else
-	while (v.running()) {
-		v.update();
-	}
-#endif
-
-	v.stop();
-
-	return 0;
+	return EXIT_SUCCESS;
 }
