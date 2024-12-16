@@ -40,27 +40,6 @@ else()
 	FetchContent_MakeAvailable(glfw)
 endif()
 
-if (WIN32)
-	target_compile_definitions(Viz
-		PRIVATE
-			GLFW_EXPOSE_NATIVE_WIN32
-	)
-	set(OS_LIBRARIES d3dcompiler ws2_32 userenv bcrypt ntdll opengl32)
-elseif(UNIX AND NOT APPLE)
-	target_compile_definitions(Viz
-		PRIVATE
-			GLFW_EXPOSE_NATIVE_X11
-			GLFW_EXPOSE_NATIVE_WAYLAND
-	)
-	set(OS_LIBRARIES "-lm -ldl")
-elseif(APPLE)
-	target_compile_definitions(Viz
-		PRIVATE
-			GLFW_EXPOSE_NATIVE_COCOA
-	)
-	set(OS_LIBRARIES "-framework CoreFoundation -framework QuartzCore -framework Metal")
-endif()
-
 # add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/imgui")
 
 target_link_libraries(Viz
@@ -72,7 +51,6 @@ target_link_libraries(Viz
 	PRIVATE
 		glfw
 		glfw_webgpu
-		${OS_LIBRARIES}
 )
 
 include(GNUInstallDirs)

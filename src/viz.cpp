@@ -40,9 +40,10 @@
  */
 
 // UFO
+#include <ufo/glfw_webgpu/glfw_surface.h>
+
 #include <ufo/viz/load_shader_module.hpp>
 #include <ufo/viz/viz.hpp>
-#include <glfw_webgpu/glfw_surface.h>
 
 // STL
 

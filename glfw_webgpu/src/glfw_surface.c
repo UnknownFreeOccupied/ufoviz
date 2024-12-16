@@ -1,5 +1,5 @@
 // UFO
-#include <glfw_webgpu/glfw_surface.h>
+#include <ufo/glfw_webgpu/glfw_surface.h>
 
 // WebGPU
 #include <webgpu/webgpu.h>
