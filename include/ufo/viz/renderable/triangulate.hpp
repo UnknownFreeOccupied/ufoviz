@@ -408,7 +408,7 @@ inline TriangleList<Vertex> triangulate(ufo::PlanGraph<3, float> const& graph, f
 	// TODO maybe separate Nodes and edges for easier coloring
 
 	TriangleList<Vertex> result;
-	for (auto [p, n] : graph.graph_) {
+	for (auto [p, n] : graph) {
 		auto center = static_cast<ufo::Vec3f>(*n);
 
 		// make a sphere for each node
