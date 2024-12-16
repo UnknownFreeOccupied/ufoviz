@@ -49,26 +49,27 @@
 namespace ufo
 {
 Viz::Viz(std::string const& window_name, VizLaunch policy,
-         WGPUPowerPreference power_preference)
+         WGPUPowerPreference power_preference, WGPUBackendType backend_type)
     : window_name_(window_name)
 {
 	// TODO: Load config
 
 	if (VizLaunch::DEFERRED != policy) {
-		start(policy, power_preference);
+		start(policy, power_preference, backend_type);
 	}
 }
 
 Viz::~Viz() { stop(); }
 
-void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference)
+void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference,
+                WGPUBackendType backend_type)
 {
 	if (running()) {
 		return;
 	}
 
 	if (nullptr == window_) {
-		init(power_preference);
+		init(power_preference, backend_type);
 	}
 
 	if (VizLaunch::RUN == policy) {
@@ -171,9 +172,31 @@ void Viz::update()
 	    wgpuDeviceCreateCommandEncoder(device_, &command_encoder_desc);
 	assert(command_encoder);
 
+	WGPUTextureDescriptor depth_texture_desc{};
+	depth_texture_desc.label                   = "Depth Texture";
+	depth_texture_desc.usage                   = WGPUTextureUsage_RenderAttachment;
+	depth_texture_desc.dimension               = WGPUTextureDimension_2D;
+	depth_texture_desc.size.width              = surface_config_.width;
+	depth_texture_desc.size.height             = surface_config_.height;
+	depth_texture_desc.size.depthOrArrayLayers = 1;
+	depth_texture_desc.sampleCount             = 1;
+	depth_texture_desc.format                  = WGPUTextureFormat_Depth32Float;
+	depth_texture_desc.mipLevelCount           = 1;
+
+	WGPUTexture depth_texture = wgpuDeviceCreateTexture(device_, &depth_texture_desc);
+
+	WGPUTextureView depth_frame = wgpuTextureCreateView(depth_texture, nullptr);
+
+	WGPURenderPassDepthStencilAttachment render_pass_depth_attachment{};
+	render_pass_depth_attachment.view            = depth_frame;
+	render_pass_depth_attachment.depthClearValue = 1.0;
+	render_pass_depth_attachment.depthLoadOp     = WGPULoadOp_Clear;
+	render_pass_depth_attachment.depthStoreOp    = WGPUStoreOp_Store;
+
 	WGPURenderPassDescriptor render_pass_desc{};
-	render_pass_desc.label                = "render_pass_encoder";
-	render_pass_desc.colorAttachmentCount = 1;
+	render_pass_desc.label                  = "render_pass_encoder";
+	render_pass_desc.colorAttachmentCount   = 1;
+	render_pass_desc.depthStencilAttachment = &render_pass_depth_attachment;
 
 	WGPURenderPassColorAttachment render_pass_color_attachment{};
 	render_pass_color_attachment.view          = frame;
@@ -212,6 +235,8 @@ void Viz::update()
 
 	wgpuCommandBufferRelease(command_buffer);
 	wgpuCommandEncoderRelease(command_encoder);
+	wgpuTextureViewRelease(depth_frame);
+	wgpuTextureRelease(depth_texture);
 	wgpuTextureViewRelease(frame);
 	wgpuTextureRelease(surface_texture.texture);
 }
@@ -271,7 +296,7 @@ void Viz::run()
 #endif
 }
 
-void Viz::init(WGPUPowerPreference power_preference)
+void Viz::init(WGPUPowerPreference power_preference, WGPUBackendType backend_type)
 {
 	surface_config_.width  = 640;
 	surface_config_.height = 480;
@@ -280,10 +305,10 @@ void Viz::init(WGPUPowerPreference power_preference)
 		// TODO: Throw
 	}
 
-	instance_            = compute::createInstance();
-	window_              = createWindow();
-	surface_             = glfwSurface(instance_, window_);
-	adapter_             = compute::createAdapter(instance_, surface_, power_preference);
+	instance_ = compute::createInstance();
+	window_   = createWindow();
+	surface_  = glfwSurface(instance_, window_);
+	adapter_  = compute::createAdapter(instance_, surface_, power_preference, backend_type);
 	auto required_limits = requiredLimits(adapter_);
 	device_              = compute::createDevice(adapter_, required_limits);
 	queue_               = compute::queue(device_);
@@ -411,6 +436,12 @@ WGPURequiredLimits Viz::requiredLimits(WGPUAdapter adapter) const
 
 	required.limits.maxBufferSize               = 2'147'483'648;
 	required.limits.maxStorageBufferBindingSize = 2'147'483'648;
+
+	required.limits.maxBufferSize =
+	    std::min(required.limits.maxBufferSize, supported.limits.maxBufferSize);
+	required.limits.maxStorageBufferBindingSize =
+	    std::min(required.limits.maxStorageBufferBindingSize,
+	             supported.limits.maxStorageBufferBindingSize);
 
 	required.limits.maxComputeWorkgroupSizeX          = 32;
 	required.limits.maxComputeWorkgroupSizeY          = 4;

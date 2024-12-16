@@ -84,12 +84,14 @@ class Viz
 {
  public:
 	Viz(std::string const& window_name = "UFOViz", VizLaunch policy = VizLaunch::ASYNC,
-	    WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
+	    WGPUPowerPreference power_preference = WGPUPowerPreference_Undefined,
+	    WGPUBackendType     backend_type     = WGPUBackendType_Undefined);
 
 	~Viz();
 
 	void start(VizLaunch           policy           = VizLaunch::ASYNC,
-	           WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
+	           WGPUPowerPreference power_preference = WGPUPowerPreference_Undefined,
+	           WGPUBackendType     backend_type     = WGPUBackendType_Undefined);
 
 	void stop();
 
@@ -116,7 +118,7 @@ class Viz
  private:
 	void run();
 
-	void init(WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
+	void init(WGPUPowerPreference power_preference, WGPUBackendType backend_type);
 
 	[[nodiscard]] GLFWwindow* createWindow() const;
 
