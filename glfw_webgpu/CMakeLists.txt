@@ -28,15 +28,10 @@ elseif(APPLE)
 	set(OS_LIBRARIES "-framework CoreFoundation -framework QuartzCore -framework Metal")
 endif()
 
-target_compile_options(glfw_webgpu PRIVATE -x objective-c)
 target_link_libraries(glfw_webgpu
 	PUBLIC 
 		glfw
 		webgpu
+	PRIVATE
 		${OS_LIBRARIES}
 )
-
-# if (APPLE)
-#   target_compile_options(glfw_webgpu PRIVATE -x objective-c)
-#   target_link_libraries(glfw_webgpu PRIVATE "-framework Cocoa" "-framework CoreVideo" "-framework IOKit" "-framework QuartzCore")
-# endif ()

@@ -67,7 +67,7 @@ void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference)
 		return;
 	}
 
-	if (nullptr == device_) {
+	if (nullptr == window_) {
 		init(power_preference);
 	}
 
