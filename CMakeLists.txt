@@ -26,6 +26,7 @@ target_link_libraries(Viz
 	PUBLIC
 		UFO::Compute
 		UFO::Math
+		UFO::Plan
 		UFO::Vision
 		# imgui
 	PRIVATE

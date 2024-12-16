@@ -40,6 +40,8 @@
  */
 
 // UFO
+#include <webgpu/webgpu.h>
+
 #include <ufo/viz/viz.hpp>
 
 // STL
@@ -47,7 +49,8 @@
 
 int main(int /* argc */, char* /* argv */[])
 {
-	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN);
+	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN, WGPUPowerPreference_Undefined,
+	           WGPUBackendType_OpenGL);
 
 	return EXIT_SUCCESS;
 }

@@ -24,7 +24,8 @@ endif()
 # # set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE ON)
 
 add_executable(ufoviz_tests
-	viz_test.cpp
+    path_test.cpp
+	# viz_test.cpp
 )
 
 target_link_libraries(ufoviz_tests PRIVATE UFO::Viz Catch2::Catch2WithMain)

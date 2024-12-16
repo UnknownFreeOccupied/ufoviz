@@ -113,6 +113,14 @@ bool Viz::running() const
 
 void Viz::update()
 {
+	float      cx     = std::cos(angles_.x);
+	float      cy     = std::cos(angles_.y);
+	float      sx     = std::sin(angles_.x);
+	float      sy     = std::sin(angles_.y);
+	ufo::Vec3f offset = ufo::Vec3f(cx * cy, sx * cy, sy) * std::exp(-zoom_);
+	camera_.pose      = static_cast<ufo::Transform3f>(
+      ufo::lookAt<float, true>(center_ + offset, center_, camera_.up));
+
 	glfwPollEvents();
 	float new_time   = glfwGetTime();
 	float delta_time = new_time - prev_time_;
@@ -136,6 +144,8 @@ void Viz::update()
 			if (0 != width && 0 != height) {
 				surface_config_.width  = width;
 				surface_config_.height = height;
+				camera_.rows           = surface_config_.height;
+				camera_.cols           = surface_config_.width;
 				wgpuSurfaceConfigure(surface_, &surface_config_);
 			}
 			return;
@@ -206,7 +216,7 @@ void Viz::update()
 	render_pass_color_attachment.depthSlice    = WGPU_DEPTH_SLICE_UNDEFINED;
 	render_pass_color_attachment.clearValue    = WGPUColor{0.0, 0.0, 0.0, 1.0};
 
-	render_pass_desc.colorAttachments = &render_pass_color_attachment;
+	render_pass_desc.colorAttachments     = &render_pass_color_attachment;
 
 	WGPURenderPassEncoder render_pass_encoder =
 	    wgpuCommandEncoderBeginRenderPass(command_encoder, &render_pass_desc);
@@ -216,10 +226,17 @@ void Viz::update()
 	wgpuRenderPassEncoderRelease(render_pass_encoder);
 
 	{
+		static bool      inited = false;
 		std::scoped_lock lock(renderables_mutex_);
 		for (Renderable const* renderable : renderables_) {
+			if (!inited) {
+				const_cast<Renderable*>(renderable)->init(device_);
+			}
+			const_cast<Renderable*>(renderable)
+			    ->update(device_, command_encoder, frame, depth_frame, camera_);
 			// TODO: Call render on renderable
 		}
+		inited = true;
 	}
 
 	WGPUCommandBufferDescriptor command_buffer_desc{};
@@ -316,6 +333,12 @@ void Viz::init(WGPUPowerPreference power_preference, WGPUBackendType backend_typ
 	surface_config_      = surfaceConfiguration(window_, device_, surface_capa_);
 
 	wgpuSurfaceConfigure(surface_, &surface_config_);
+
+	camera_.vertical_fov = ufo::radians(60.0f);
+	camera_.near_clip    = 0.01;
+	camera_.far_clip     = 10000.0;
+	camera_.rows         = surface_config_.height;
+	camera_.cols         = surface_config_.width;
 }
 
 GLFWwindow* Viz::createWindow() const

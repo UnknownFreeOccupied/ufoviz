@@ -44,6 +44,7 @@
 
 // UFO
 #include <ufo/compute/compute.hpp>
+#include <ufo/vision/camera.hpp>
 #include <ufo/viz/renderable.hpp>
 
 // STL
@@ -166,6 +167,11 @@ class Viz
 
 	std::mutex                  renderables_mutex_;
 	std::set<Renderable const*> renderables_;
+
+	Camera     camera_;
+	ufo::Vec2f angles_{0.0f, 0.0f};
+	ufo::Vec3f center_{4.4f, 0.0f, 1.7f};
+	float      zoom_ = 0.0f;
 };
 }  // namespace ufo
 

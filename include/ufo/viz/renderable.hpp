@@ -43,12 +43,8 @@
 #define UFO_VIZ_RENDERABLE_HPP
 
 // UFO
-#include <ufo/math/vec3.hpp>
+#include <ufo/compute/compute.hpp>
 #include <ufo/vision/camera.hpp>
-#include <ufo/vision/color.hpp>
-
-// WEBGPU
-#include <webgpu/webgpu.h>
 
 namespace ufo
 {
@@ -57,25 +53,15 @@ class Renderable
  public:
 	virtual ~Renderable() {}
 
-	virtual void init(WGPUDevice device) {}
+	virtual void init(WGPUDevice device) = 0;
 
-	virtual void release() {}
+	virtual void release() = 0;
 
-	[[nodiscard]] virtual bool renders() const { return false; }
+	virtual void update(WGPUDevice device, WGPUCommandEncoder encoder,
+	                    WGPUTextureView render_texture, WGPUTextureView depth_texture,
+	                    Camera const& camera) = 0;
 
-	[[nodiscard]] virtual bool updates() const { return false; }
-
-	virtual void onRender(Camera const& camera, WGPUCommandEncoder encoder,
-	                      WGPUTextureView texture, WGPUTextureView depth_texture)
-	{
-	}
-
-	virtual void onUpdate(Camera const& camera, std::vector<Vec3f>& point,
-	                      std::vector<Color>& color, std::vector<std::uint32_t>& index)
-	{
-	}
-
-	virtual void onGui() {}
+	virtual void onGui() = 0;
 };
 }  // namespace ufo
 
