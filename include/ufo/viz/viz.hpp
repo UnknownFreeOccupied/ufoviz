@@ -43,8 +43,8 @@
 #define UFO_VIZ_VIZ_HPP
 
 // UFO
-#include <ufo/viz/renderable.hpp>
 #include <ufo/compute/compute.hpp>
+#include <ufo/viz/renderable.hpp>
 
 // STL
 #include <mutex>
@@ -65,7 +65,20 @@ struct GLFWwindow;
 
 namespace ufo
 {
-enum class VizLaunch { ASYNC, RUN, ONLY_START, DEFERRED };
+/*!
+ * @brief Hej
+ *
+ */
+enum class VizLaunch {
+	// Run it in a separate thread (i.e., non-blocking)
+	ASYNC,
+	// Run it in same thread (i.e., blocking)
+	RUN,
+	// Only open window
+	ONLY_START,
+	// Lazy Sunday, do nothing
+	DEFERRED
+};
 
 class Viz
 {
@@ -79,11 +92,16 @@ class Viz
 	           WGPUPowerPreference power_preference = WGPUPowerPreference_HighPerformance);
 
 	void stop();
-	
+
 	[[nodiscard]] bool running() const;
 
 	void update();
 
+	[[nodiscard]] WGPUInstance instance() const;
+
+	[[nodiscard]] WGPUAdapter adapter() const;
+
+	[[nodiscard]] WGPUDevice device() const;
 
 	void addRenderable(Renderable const& renderable);
 
@@ -110,6 +128,8 @@ class Viz
 
 	[[nodiscard]] WGPURequiredLimits requiredLimits(WGPUAdapter adapter) const;
 
+	void initGui();
+
 	void updateGui(WGPURenderPassEncoder render_pass);
 
 	// A function called when the window is resized.
@@ -123,8 +143,6 @@ class Viz
 	void onScroll(double x_offset, double y_offset);
 
 	void onKey(int key, int scancode, int action, int mods);
-
-	void initGui();
 
  private:
 	GLFWwindow* window_ = nullptr;

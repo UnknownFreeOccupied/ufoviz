@@ -42,7 +42,6 @@
 // UFO
 #include <ufo/glfw_webgpu/glfw_surface.h>
 
-#include <ufo/viz/load_shader_module.hpp>
 #include <ufo/viz/viz.hpp>
 
 // STL
@@ -91,16 +90,23 @@ void Viz::stop()
 
 	wgpuSurfaceCapabilitiesFreeMembers(surface_capa_);
 	wgpuQueueRelease(queue_);
+	queue_ = nullptr;
 	wgpuDeviceRelease(device_);
+	device_ = nullptr;
 	wgpuAdapterRelease(adapter_);
+	adapter_ = nullptr;
 	wgpuSurfaceRelease(surface_);
+	surface_ = nullptr;
 	glfwDestroyWindow(window_);
+	window_ = nullptr;
 	wgpuInstanceRelease(instance_);
+	instance_ = nullptr;
 	glfwTerminate();
 }
 
 bool Viz::running() const
 {
+	// TODO: Lock so window_ does not become nullptr
 	return nullptr != window_ && !glfwWindowShouldClose(window_);
 }
 
@@ -209,6 +215,12 @@ void Viz::update()
 	wgpuTextureViewRelease(frame);
 	wgpuTextureRelease(surface_texture.texture);
 }
+
+WGPUInstance Viz::instance() const { return instance_; }
+
+WGPUAdapter Viz::adapter() const { return adapter_; }
+
+WGPUDevice Viz::device() const { return device_; }
 
 void Viz::addRenderable(Renderable const& renderable)
 {

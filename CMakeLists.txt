@@ -7,7 +7,6 @@ add_subdirectory(apps)
 add_subdirectory(glfw_webgpu)
 
 add_library(Viz
-	src/load_shader_module.cpp
 	src/viz.cpp
 )
 add_library(UFO::Viz ALIAS Viz)
