@@ -28,6 +28,14 @@ add_executable(ufoviz_tests
 	# viz_test.cpp
 )
 
+set_target_properties(ufoviz_tests 
+	PROPERTIES
+		VERSION ${PROJECT_VERSION}
+		SOVERSION ${PROJECT_VERSION_MAJOR}
+		CXX_STANDARD 17
+		CXX_EXTENSIONS OFF
+)
+
 target_link_libraries(ufoviz_tests PRIVATE UFO::Viz Catch2::Catch2WithMain)
 
 # target_compile_options(ufovision_tests

@@ -246,7 +246,7 @@ class RenderableTrianglelist
 		// Set the fragment state
 		color_target = {};
 		color_target.format =
-		    WGPUTextureFormat_RGBA8UnormSrgb;  // Match the swap chain format
+		    WGPUTextureFormat_BGRA8UnormSrgb;  // Match the swap chain format
 		color_target.writeMask = WGPUColorWriteMask_All;
 
 		fragment_state               = {};

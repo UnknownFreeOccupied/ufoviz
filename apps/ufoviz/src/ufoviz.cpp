@@ -49,8 +49,7 @@
 
 int main(int /* argc */, char* /* argv */[])
 {
-	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN, WGPUPowerPreference_Undefined,
-	           WGPUBackendType_OpenGL);
+	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN);
 
 	return EXIT_SUCCESS;
 }

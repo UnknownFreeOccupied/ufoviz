@@ -49,5 +49,5 @@ TEST_CASE("[Viz] Path")
 	RenderablePath renderable_path(path, Color(255, 0, 0), 0.2f, 16);
 	v.addRenderable(renderable_path);
 
-	v.start(ufo::VizLaunch::RUN, WGPUPowerPreference_Undefined, WGPUBackendType_OpenGL);
+	v.start(ufo::VizLaunch::RUN);
 }
