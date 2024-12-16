@@ -45,7 +45,6 @@
 #include <ufo/viz/viz.hpp>
 
 // STL
-#include <iostream>
 
 // GLFW
 #if defined(GLFW_EXPOSE_NATIVE_COCOA)
@@ -87,11 +86,13 @@ void Viz::start(bool seperate_thread, WGPUPowerPreference power_preference)
 
 void Viz::stop()
 {
+	if (!running()) {
+		return;
+	}
+
 	if (render_thread_.joinable()) {
 		render_thread_.join();
 	}
-
-	// TODO: Implement
 
 	wgpuSurfaceCapabilitiesFreeMembers(surface_capa_);
 	wgpuQueueRelease(queue_);

@@ -2,6 +2,8 @@ option(UFOVIZ_BUILD_DOCS     "Generate documentation" OFF)
 option(UFOVIZ_BUILD_TESTS    "Unit testing"           OFF)
 option(UFOVIZ_BUILD_COVERAGE "Test Coverage"          OFF)
 
+add_subdirectory(apps)
+
 add_library(Viz 
 	src/load_shader_module.cpp
 	src/viz.cpp
