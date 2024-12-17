@@ -66,35 +66,23 @@ struct GLFWwindow;
 
 namespace ufo
 {
-/*!
- * @brief Hej
- *
- */
-enum class VizLaunch {
-	// Run it in a separate thread (i.e., non-blocking)
-	ASYNC,
-	// Run it in same thread (i.e., blocking)
-	RUN,
-	// Only open window
-	ONLY_START,
-	// Lazy Sunday, do nothing
-	DEFERRED
-};
-
 class Viz
 {
  public:
-	Viz(std::string const& window_name = "UFOViz", VizLaunch policy = VizLaunch::ASYNC,
+	Viz(std::string const&  window_name      = "UFOViz",
 	    WGPUPowerPreference power_preference = WGPUPowerPreference_Undefined,
 	    WGPUBackendType     backend_type     = WGPUBackendType_Undefined);
 
 	~Viz();
 
-	void start(VizLaunch           policy           = VizLaunch::ASYNC,
-	           WGPUPowerPreference power_preference = WGPUPowerPreference_Undefined,
+	void start(WGPUPowerPreference power_preference = WGPUPowerPreference_Undefined,
 	           WGPUBackendType     backend_type     = WGPUBackendType_Undefined);
 
 	void stop();
+
+	void run();
+
+	void runAsync();
 
 	[[nodiscard]] bool running() const;
 
@@ -106,9 +94,9 @@ class Viz
 
 	[[nodiscard]] WGPUDevice device() const;
 
-	void addRenderable(Renderable const& renderable);
+	void addRenderable(std::shared_ptr<Renderable> const& renderable);
 
-	void eraseRenderable(Renderable const& renderable);
+	void eraseRenderable(std::shared_ptr<Renderable> const& renderable);
 
 	void clearRenderable();
 
@@ -117,8 +105,6 @@ class Viz
 	void saveConfig() const;
 
  private:
-	void run();
-
 	void init(WGPUPowerPreference power_preference, WGPUBackendType backend_type);
 
 	[[nodiscard]] GLFWwindow* createWindow() const;
@@ -165,8 +151,8 @@ class Viz
 
 	float prev_time_{};
 
-	std::mutex                  renderables_mutex_;
-	std::set<Renderable const*> renderables_;
+	std::mutex                            renderables_mutex_;
+	std::set<std::shared_ptr<Renderable>> renderables_;
 
 	Camera     camera_;
 	ufo::Vec2f angles_{0.0f, 0.0f};

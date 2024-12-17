@@ -3,11 +3,14 @@
 #define UFO_VIZ_RENDERABLE_PATH_HPP
 
 // UFO
-#include <cstdio>
 #include <ufo/compute/compute.hpp>
 #include <ufo/plan/graph.hpp>
+#include <ufo/viz/renderable.hpp>
 #include <ufo/viz/renderable/renderable_trianglelist.hpp>
 #include <ufo/viz/renderable/triangulate.hpp>
+
+// STL
+#include <cstdio>
 
 namespace ufo
 {
@@ -31,7 +34,7 @@ class RenderablePath : public Renderable
 		triangle_list_.shader_module_ =
 		    compute::loadShaderModule(device, "../../../../lib/viz/shaders/render.wgsl");
 		if (nullptr == triangle_list_.shader_module_) {
-			std::printf( "Could not load shader!\n");
+			std::printf("Could not load shader!\n");
 			exit(1);
 		}
 		triangle_list_.init(device);

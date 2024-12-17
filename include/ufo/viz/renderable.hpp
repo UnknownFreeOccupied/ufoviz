@@ -51,7 +51,7 @@ namespace ufo
 class Renderable
 {
  public:
-	virtual ~Renderable() {}
+	virtual ~Renderable() = default;
 
 	virtual void init(WGPUDevice device) = 0;
 

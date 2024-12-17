@@ -4,8 +4,8 @@
 #include <ufo/plan/graph.hpp>
 #include <ufo/plan/path.hpp>
 #include <ufo/vision/color.hpp>
-#include <ufo/viz/viz.hpp>
 #include <ufo/viz/renderable/path.hpp>
+#include <ufo/viz/viz.hpp>
 
 // Catch2
 #include <catch2/benchmark/catch_benchmark.hpp>
@@ -43,11 +43,10 @@ TEST_CASE("[Viz] Path")
 {
 	using namespace std::chrono_literals;
 
-	Viz v("UFOViz", ufo::VizLaunch::DEFERRED);
+	Viz v("UFOViz");
 
-	auto path            = makeTestPlan();
-	RenderablePath renderable_path(path, Color(255, 0, 0), 0.2f, 16);
-	v.addRenderable(renderable_path);
+	auto path = makeTestPlan();
+	v.addRenderable(std::make_unique<RenderablePath>(path, Color(255, 0, 0), 0.2f, 16));
 
-	v.start(ufo::VizLaunch::RUN);
+	v.run();
 }

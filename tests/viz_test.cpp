@@ -13,8 +13,5 @@ TEST_CASE("Viz")
 
 	Viz v("UFOViz");
 
-	while (v.running()) {
-		// v.update();
-		std::this_thread::sleep_for(100ms);
-	}
+	v.run();
 }

@@ -49,7 +49,9 @@
 
 int main(int /* argc */, char* /* argv */[])
 {
-	ufo::Viz v("UFOViz", ufo::VizLaunch::RUN);
+	ufo::Viz v("UFOViz");
+
+	v.run();
 
 	return EXIT_SUCCESS;
 }

@@ -44,25 +44,20 @@
 
 #include <ufo/viz/viz.hpp>
 
-// STL
-
 namespace ufo
 {
-Viz::Viz(std::string const& window_name, VizLaunch policy,
-         WGPUPowerPreference power_preference, WGPUBackendType backend_type)
+Viz::Viz(std::string const& window_name, WGPUPowerPreference power_preference,
+         WGPUBackendType backend_type)
     : window_name_(window_name)
 {
-	// TODO: Load config
+	init(power_preference, backend_type);
 
-	if (VizLaunch::DEFERRED != policy) {
-		start(policy, power_preference, backend_type);
-	}
+	// TODO: Load config
 }
 
 Viz::~Viz() { stop(); }
 
-void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference,
-                WGPUBackendType backend_type)
+void Viz::start(WGPUPowerPreference power_preference, WGPUBackendType backend_type)
 {
 	if (running()) {
 		return;
@@ -70,12 +65,6 @@ void Viz::start(VizLaunch policy, WGPUPowerPreference power_preference,
 
 	if (nullptr == window_) {
 		init(power_preference, backend_type);
-	}
-
-	if (VizLaunch::RUN == policy) {
-		run();
-	} else if (VizLaunch::ASYNC == policy) {
-		render_thread_ = std::thread(&Viz::run, this);
 	}
 }
 
@@ -87,6 +76,10 @@ void Viz::stop()
 
 	if (render_thread_.joinable()) {
 		render_thread_.join();
+	}
+
+	for (auto& renderable : renderables_) {
+		renderable->release();
 	}
 
 	wgpuSurfaceCapabilitiesFreeMembers(surface_capa_);
@@ -104,6 +97,23 @@ void Viz::stop()
 	instance_ = nullptr;
 	glfwTerminate();
 }
+
+void Viz::run()
+{
+#if defined(__EMSCRIPTEN__)
+	auto callback = [](void* arg) {
+		Viz* v = static_cast<Viz*>(arg);
+		v->update();
+	};
+	emscripten_set_main_loop_arg(callback, this, 0, true);
+#else
+	while (running()) {
+		update();
+	}
+#endif
+}
+
+void Viz::runAsync() { render_thread_ = std::thread(&Viz::run, this); }
 
 bool Viz::running() const
 {
@@ -216,7 +226,7 @@ void Viz::update()
 	render_pass_color_attachment.depthSlice    = WGPU_DEPTH_SLICE_UNDEFINED;
 	render_pass_color_attachment.clearValue    = WGPUColor{0.0, 0.0, 0.0, 1.0};
 
-	render_pass_desc.colorAttachments     = &render_pass_color_attachment;
+	render_pass_desc.colorAttachments = &render_pass_color_attachment;
 
 	WGPURenderPassEncoder render_pass_encoder =
 	    wgpuCommandEncoderBeginRenderPass(command_encoder, &render_pass_desc);
@@ -226,17 +236,10 @@ void Viz::update()
 	wgpuRenderPassEncoderRelease(render_pass_encoder);
 
 	{
-		static bool      inited = false;
 		std::scoped_lock lock(renderables_mutex_);
-		for (Renderable const* renderable : renderables_) {
-			if (!inited) {
-				const_cast<Renderable*>(renderable)->init(device_);
-			}
-			const_cast<Renderable*>(renderable)
-			    ->update(device_, command_encoder, frame, depth_frame, camera_);
-			// TODO: Call render on renderable
+		for (auto& renderable : renderables_) {
+			renderable->update(device_, command_encoder, frame, depth_frame, camera_);
 		}
-		inited = true;
 	}
 
 	WGPUCommandBufferDescriptor command_buffer_desc{};
@@ -264,26 +267,26 @@ WGPUAdapter Viz::adapter() const { return adapter_; }
 
 WGPUDevice Viz::device() const { return device_; }
 
-void Viz::addRenderable(Renderable const& renderable)
+void Viz::addRenderable(std::shared_ptr<Renderable> const& renderable)
 {
-	// TODO: Should this init something?
-
 	std::scoped_lock lock(renderables_mutex_);
-	renderables_.insert(&renderable);
+	renderables_.insert(renderable);
+
+	if (nullptr != device_) {
+		renderable->init(device_);
+	}
 }
 
-void Viz::eraseRenderable(Renderable const& renderable)
+void Viz::eraseRenderable(std::shared_ptr<Renderable> const& renderable)
 {
-	// TODO: Should this release something?
-
 	std::scoped_lock lock(renderables_mutex_);
-	renderables_.erase(&renderable);
+	renderables_.erase(renderable);
+
+	renderable->release();
 }
 
 void Viz::clearRenderable()
 {
-	// TODO: Should this release something?
-
 	std::scoped_lock lock(renderables_mutex_);
 	renderables_.clear();
 }
@@ -296,21 +299,6 @@ void Viz::loadConfig()
 void Viz::saveConfig() const
 {
 	// TODO: Implement
-}
-
-void Viz::run()
-{
-#if defined(__EMSCRIPTEN__)
-	auto callback = [](void* arg) {
-		Viz* v = static_cast<Viz*>(arg);
-		v->update();
-	};
-	emscripten_set_main_loop_arg(callback, this, 0, true);
-#else
-	while (running()) {
-		update();
-	}
-#endif
 }
 
 void Viz::init(WGPUPowerPreference power_preference, WGPUBackendType backend_type)
@@ -339,6 +327,10 @@ void Viz::init(WGPUPowerPreference power_preference, WGPUBackendType backend_typ
 	camera_.far_clip     = 10000.0;
 	camera_.rows         = surface_config_.height;
 	camera_.cols         = surface_config_.width;
+
+	for (auto& renderable : renderables_) {
+		renderable->init(device_);
+	}
 }
 
 GLFWwindow* Viz::createWindow() const
