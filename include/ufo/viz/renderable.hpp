@@ -53,7 +53,7 @@ class Renderable
  public:
 	virtual ~Renderable() = default;
 
-	virtual void init(WGPUDevice device) = 0;
+	virtual void init(WGPUDevice device, WGPUTextureFormat texture_format) = 0;
 
 	virtual void release() = 0;
 

@@ -29,7 +29,7 @@ class RenderablePath : public Renderable
 
 	~RenderablePath() override { release(); }
 
-	void init(WGPUDevice device) override
+	void init(WGPUDevice device, WGPUTextureFormat texture_format) override
 	{
 		triangle_list_.shader_module_ =
 		    compute::loadShaderModule(device, UFOVIZ_SHADER_DIR "/render.wgsl");

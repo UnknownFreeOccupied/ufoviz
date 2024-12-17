@@ -273,7 +273,7 @@ void Viz::addRenderable(std::shared_ptr<Renderable> const& renderable)
 	renderables_.insert(renderable);
 
 	if (nullptr != device_) {
-		renderable->init(device_);
+		renderable->init(device_, surface_capa_.formats[0]);
 	}
 }
 
@@ -329,7 +329,7 @@ void Viz::init(WGPUPowerPreference power_preference, WGPUBackendType backend_typ
 	camera_.cols         = surface_config_.width;
 
 	for (auto& renderable : renderables_) {
-		renderable->init(device_);
+		renderable->init(device_, surface_capa_.formats[0]);
 	}
 }
 

@@ -24,6 +24,7 @@ set_target_properties(Viz
 target_link_libraries(Viz
 	PUBLIC
 		UFO::Compute
+		UFO::Map
 		UFO::Math
 		UFO::Plan
 		UFO::Vision
