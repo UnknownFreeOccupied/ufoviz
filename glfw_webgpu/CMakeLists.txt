@@ -50,7 +50,7 @@ endif()
 target_link_libraries(glfw_webgpu
 	PUBLIC 
 		glfw
-		webgpu
+		wgpu_native
 	PRIVATE
 		${OS_LIBRARIES}
 )

@@ -1,16 +1,20 @@
-struct Node {
+struct Index {
   pos: u32,
   offset: u32
 };
 
+const NULL_POS: u32 = ~0u;
+const NULL_INDEX: Index = Index(NULL_POS, 0u);
+
 struct UBO {
   projection: mat4x4f,
   view: mat4x4f,
-  node: Node,
+  dim: vec2u,
+  near_clip: f32,
+  far_clip: f32,
+  node: Index,
   node_center: vec3f,
-  node_half_length: f32,
-  near_clip  : f32,
-  far_clip   : f32
+  node_half_length: f32
 };
 
 struct Code {
@@ -34,7 +38,7 @@ struct ColorBlock {
   color: array<u32, 8>
 };
 
-@group(0) @binding(0) var out_texture: texture_storage_2d<rgba8unorm,write>;
+@group(0) @binding(0) var<storage,read_write> hits: array<Index>;
 @group(0) @binding(1) var<uniform> uniforms: UBO;
 @group(0) @binding(2) var<storage,read> tree_buffer: array<TreeBlock>;
 @group(0) @binding(3) var<storage,read> occupancy_buffer: array<OccupancyBlock>;
@@ -45,7 +49,7 @@ struct Ray {
 };
 
 struct TraceParams {
-  node: Node,
+  node: Index,
   t0: vec3f,
   t1: vec3f,
   a: u32
@@ -81,56 +85,48 @@ fn newNode(cur: u32, dim: u32) -> u32 {
   return ((cur & x) << (3u - dim)) | cur | x;
 }
 
-fn children(node: Node) -> u32 {
+fn children(node: Index) -> u32 {
   return tree_buffer[node.pos].children[node.offset];
 }
 
-fn child(node: Node, child: u32) -> Node {
-  return Node(children(node), child);
+fn child(node: Index, child: u32) -> Index {
+  return Index(children(node), child);
 }
 
-fn isLeaf(node: Node) -> bool {
+fn isLeaf(node: Index) -> bool {
   return ~0u == children(node);
 }
 
-fn depth(node: Node) -> u32 {
+fn depth(node: Index) -> u32 {
   return tree_buffer[node.pos].code.depth;
 }
 
-fn hasChildren(node: Node) -> bool {
+fn hasChildren(node: Index) -> bool {
   return !isLeaf(node);
 }
 
-fn containsUnknown(node: Node) -> bool {
+fn containsUnknown(node: Index) -> bool {
   return 0u != (occupancy_buffer[node.pos].occupancy[node.offset / 2u] & (1u << (16u * (node.offset % 2u))));
 }
 
-fn containsFree(node: Node) -> bool {
+fn containsFree(node: Index) -> bool {
   return 0u != (occupancy_buffer[node.pos].occupancy[node.offset / 2u] & (2u << (16u * (node.offset % 2u))));
 }
 
-fn containsOccupied(node: Node) -> bool {
+fn containsOccupied(node: Index) -> bool {
   return 0u != (occupancy_buffer[node.pos].occupancy[node.offset / 2u] & (4u << (16u * (node.offset % 2u))));
 }
 
-fn occupied(node: Node) -> bool {
+fn occupied(node: Index) -> bool {
   return 0.0 < unpack4x8snorm(occupancy_buffer[node.pos].occupancy[node.offset / 2u])[2u * (node.offset % 2u)];
 }
 
-fn returnable(node: Node) -> bool {
+fn returnable(node: Index) -> bool {
   return isLeaf(node) && occupied(node);
 }
 
-fn traversable(node: Node) -> bool {
+fn traversable(node: Index) -> bool {
   return hasChildren(node) && containsOccupied(node);
-}
-
-fn colorRaw(node: Node) -> u32 {
-  return color_buffer[node.pos].color[node.offset];
-}
-
-fn color(node: Node) -> vec4f {
-  return unpack4x8unorm(color_buffer[node.pos].color[node.offset]);
 }
 
 fn offset(code: Code, depth: u32) -> u32 {
@@ -141,14 +137,14 @@ fn offset(code: Code, depth: u32) -> u32 {
   return (c >> (3u * d)) & 7u;
 }
 
-fn parent(node: Node) -> Node {
+fn parent(node: Index) -> Index {
   let d = depth(node) + 1;
   let o = offset(tree_buffer[node.pos].code, d);
   let p = tree_buffer[node.pos].parent;
-  return Node(p, o);
+  return Index(p, o);
 }
 
-fn trace(params: TraceParams) -> u32 {
+fn trace(params: TraceParams) -> Index {
   var node = params.node;
   var t0   = params.t0;
   var t1   = params.t1;
@@ -162,11 +158,11 @@ fn trace(params: TraceParams) -> u32 {
   let max_dist = min_t1;
 
   if max_t0 >= min_t1 || uniforms.near_clip > max_dist || uniforms.far_clip < min_dist {
-    return 0u;
+    return NULL_INDEX;
   } else if uniforms.near_clip <= max_dist && returnable(node) {
-    return colorRaw(node);
+    return node;
   } else if !traversable(node) {
-    return 0u;
+    return NULL_INDEX;
   }
 
   // 32 / (3 + 4) = 4
@@ -227,9 +223,9 @@ fn trace(params: TraceParams) -> u32 {
     if uniforms.near_clip > max_dist {
       continue;
     } else if uniforms.far_clip < min_dist {
-      return 0u;
+      return NULL_INDEX;
     } else if uniforms.near_clip <= max_dist && returnable(child) {
-      return colorRaw(child);
+      return child;
     } else if !traversable(child) {
       continue;
     }
@@ -248,10 +244,10 @@ fn trace(params: TraceParams) -> u32 {
     stack[bucket] |= (next_offset | (prev_offset << 4u)) << pos;
   }
 
-  return 0u;
+  return NULL_INDEX;
 }
 
-fn traceInit(node: Node, ray: Ray) -> TraceParams {
+fn traceInit(node: Index, ray: Ray) -> TraceParams {
   let mask = vec3f(0.0) > ray.direction;
 
   let origin = select(ray.origin, (uniforms.node_center * 2.0) - ray.origin, mask);
@@ -271,7 +267,7 @@ fn traceInit(node: Node, ray: Ray) -> TraceParams {
 }
 
 fn isOffScreen(v: vec2u) -> bool {
-  return any(textureDimensions(out_texture) <= v);
+  return any(uniforms.dim <= v);
 }
 
 @compute @workgroup_size(8, 4)
@@ -282,7 +278,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
   let texel = vec2f(id.xy) + vec2f(0.5);
 
-  let texel_nds = (texel / vec2f(textureDimensions(out_texture))) * vec2f(2.0) - vec2f(1.0);
+  let texel_nds = (texel / vec2f(uniforms.dim)) * vec2f(2.0) - vec2f(1.0);
   let p_nds_h = vec4f(texel_nds.x, texel_nds.y, -1.0, 1.0);
   var dir_eye = uniforms.projection * p_nds_h;
   dir_eye.w = 0.0;
@@ -294,7 +290,6 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
   let params = traceInit(uniforms.node, ray);
 
-  let color = unpack4x8unorm(trace(params));
-
-  textureStore(out_texture, id.xy, color);
+  // TODO: What should this be?
+  hits[id.x + id.y * uniforms.dim.x] = trace(params);
 }

@@ -58,6 +58,30 @@ namespace ufo
 template <class Map>
 class RenderableMap : public Renderable
 {
+ private:
+	struct Uniform {
+		Mat4x4f   projection;
+		Mat4x4f   view;
+		Vec2u     dim;
+		float     near_clip;
+		float     far_clip;
+		TreeIndex node;
+		float     _pad0[2];
+		Vec3f     node_center;
+		float     node_half_length;
+
+		bool operator==(Uniform const& rhs) const
+		{
+			return projection == rhs.projection && view == rhs.view && dim == rhs.dim &&
+			       near_clip == rhs.near_clip && far_clip == rhs.far_clip && node == rhs.node &&
+			       node_center == rhs.node_center && node_half_length == rhs.node_half_length;
+		}
+
+		bool operator!=(Uniform const& rhs) const { return !(*this == rhs); }
+	};
+	// Have the compiler check byte alignment
+	static_assert(sizeof(Uniform) % 16 == 0);
+
  public:
 	RenderableMap(Map const& map)  // : map_(map)
 	{
@@ -71,7 +95,12 @@ class RenderableMap : public Renderable
 		compute_bind_group_layout_ = createBindGroupLayout(device, texture_format);
 		compute_pipeline_layout_   = createPipelineLayout(device, compute_bind_group_layout_);
 		compute_pipeline_          = createComputePipeline(device, compute_pipeline_layout_);
-		compute_bind_group_        = createBindGroup(device);
+
+		map_.gpuInit(device);
+
+		uniform_buffer_ =
+		    compute::createBuffer(map_.gpuDevice(), sizeof(uniform_),
+		                          WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform, false);
 	}
 
 	void release() override
@@ -101,6 +130,25 @@ class RenderableMap : public Renderable
 	            WGPUTextureView render_texture, WGPUTextureView depth_texture,
 	            Camera const& camera) override
 	{
+		Uniform uniform = createUniform(map_, camera);
+
+		if (uniform_ != uniform) {
+			map_.gpuUpdateBuffers();
+
+			uniform_ = uniform;
+			hits_.resize(uniform.dim.x * uniform.dim.y);
+
+			hits_buffer_ =
+			    compute::createBuffer(map_.gpuDevice(), hits_.size() * sizeof(TreeIndex),
+			                          WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc, false);
+
+			if (nullptr != compute_bind_group_) {
+				wgpuBindGroupRelease(compute_bind_group_);
+			}
+
+			compute_bind_group_ = createBindGroup(device);
+		}
+
 		// TODO: Implement
 	}
 
@@ -117,18 +165,16 @@ class RenderableMap : public Renderable
 
 		// Output texture
 		compute::setDefault(binding_layout[0]);
-		binding_layout[0].binding                      = 0;
-		binding_layout[0].visibility                   = WGPUShaderStage_Compute;
-		binding_layout[0].storageTexture.access        = WGPUStorageTextureAccess_WriteOnly;
-		binding_layout[0].storageTexture.format        = WGPUTextureFormat_RGBA8Unorm;
-		binding_layout[0].storageTexture.viewDimension = WGPUTextureViewDimension_2D;
+		binding_layout[0].binding     = 0;
+		binding_layout[0].visibility  = WGPUShaderStage_Compute;
+		binding_layout[0].buffer.type = WGPUBufferBindingType_Storage;
 
 		// Uniform
 		compute::setDefault(binding_layout[1]);
-		binding_layout[1].binding     = 1;
-		binding_layout[1].visibility  = WGPUShaderStage_Compute;
-		binding_layout[1].buffer.type = WGPUBufferBindingType_Uniform;
-		// binding_layout[1].buffer.minBindingSize = sizeof(uniform_);
+		binding_layout[1].binding               = 1;
+		binding_layout[1].visibility            = WGPUShaderStage_Compute;
+		binding_layout[1].buffer.type           = WGPUBufferBindingType_Uniform;
+		binding_layout[1].buffer.minBindingSize = sizeof(uniform_);
 
 		// Tree buffer
 		compute::setDefault(binding_layout[2]);
@@ -204,40 +250,55 @@ class RenderableMap : public Renderable
 		// Create a binding
 		std::array<WGPUBindGroupEntry, 4> binding{};
 
-		// // Output buffer
-		// binding[0].nextInChain = nullptr;
-		// binding[0].binding     = 0;
-		// binding[0].textureView = texture_view_;
+		// Hits buffer
+		binding[0].nextInChain = nullptr;
+		binding[0].binding     = 0;
+		binding[0].buffer      = hits_buffer_;
+		binding[0].offset      = 0;
+		binding[0].size        = hits_.size() * sizeof(TreeIndex);
 
-		// // Uniforms
-		// binding[1].nextInChain = nullptr;
-		// binding[1].binding     = 1;
-		// binding[1].buffer      = uniform_buffer_;
-		// binding[1].offset      = 0;
-		// binding[1].size        = sizeof(uniform_);
+		// Uniform
+		binding[1].nextInChain = nullptr;
+		binding[1].binding     = 1;
+		binding[1].buffer      = uniform_buffer_;
+		binding[1].offset      = 0;
+		binding[1].size        = sizeof(uniform_);
 
-		// // Tree
-		// binding[2].nextInChain = nullptr;
-		// binding[2].binding     = 2;
-		// binding[2].buffer      = tree_buffer_;
-		// binding[2].offset      = 0;
-		// binding[2].size        = tree_buffer_size_;
+		// Tree
+		binding[2].nextInChain = nullptr;
+		binding[2].binding     = 2;
+		binding[2].buffer      = map_.gpuTreeBuffer();
+		binding[2].offset      = 0;
+		binding[2].size        = map_.gpuTreeBufferSize();
 
-		// // Occupancy
-		// binding[3].nextInChain = nullptr;
-		// binding[3].binding     = 3;
-		// binding[3].buffer      = occupancy_buffer_;
-		// binding[3].offset      = 0;
-		// binding[3].size        = occupancy_buffer_size_;
+		// Occupancy
+		binding[3].nextInChain = nullptr;
+		binding[3].binding     = 3;
+		binding[3].buffer      = map_.gpuOccupancyBuffer();
+		binding[3].offset      = 0;
+		binding[3].size        = map_.gpuOccupancyBufferSize();
 
 		// A bind group contains one or multiple bindings
 		WGPUBindGroupDescriptor desc{};
 		desc.nextInChain = nullptr;
 		desc.layout      = compute_bind_group_layout_;
-		// There must be as many bindings as declared in the layout!
-		desc.entryCount = binding.size();
-		desc.entries    = binding.data();
+		desc.entryCount  = binding.size();
+		desc.entries     = binding.data();
 		return wgpuDeviceCreateBindGroup(device, &desc);
+	}
+
+	[[nodiscard]] static Uniform createUniform(Map const& map, Camera const& camera)
+	{
+		Uniform uniform;
+		uniform.projection       = inverse(camera.projectionPerspective());
+		uniform.view             = inverse(Mat4x4f(camera.pose));
+		uniform.dim              = Vec2u(camera.cols, camera.rows);
+		uniform.near_clip        = camera.near_clip;
+		uniform.far_clip         = camera.far_clip;
+		uniform.node             = map.index();
+		uniform.node_center      = map.center(uniform.node);
+		uniform.node_half_length = map.halfLength(uniform.node);
+		return uniform;
 	}
 
  private:
@@ -247,6 +308,13 @@ class RenderableMap : public Renderable
 	WGPUPipelineLayout  compute_pipeline_layout_   = nullptr;
 	WGPUComputePipeline compute_pipeline_          = nullptr;
 	WGPUBindGroup       compute_bind_group_        = nullptr;
+
+	WGPUBuffer hits_buffer_    = nullptr;
+	WGPUBuffer uniform_buffer_ = nullptr;
+
+	Uniform uniform_;
+
+	std::vector<TreeIndex> hits_;
 };
 }  // namespace ufo
 
