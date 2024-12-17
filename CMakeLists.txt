@@ -1,6 +1,6 @@
-option(UFOVIZ_BUILD_DOCS     "Generate documentation" OFF)
-option(UFOVIZ_BUILD_TESTS    "Unit testing"           OFF)
-option(UFOVIZ_BUILD_COVERAGE "Test Coverage"          OFF)
+option(UFOVIZ_BUILD_DOCS "Generate documentation" OFF)
+option(UFOVIZ_BUILD_TESTS "Unit testing" OFF)
+option(UFOVIZ_BUILD_COVERAGE "Test Coverage" OFF)
 
 add_subdirectory(apps)
 
@@ -11,7 +11,7 @@ add_library(Viz
 )
 add_library(UFO::Viz ALIAS Viz)
 
-set_target_properties(Viz 
+set_target_properties(Viz
 	PROPERTIES
 		VERSION ${PROJECT_VERSION}
 		SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -21,14 +21,14 @@ set_target_properties(Viz
 )
 
 # add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/imgui")
-
 target_link_libraries(Viz
 	PUBLIC
 		UFO::Compute
 		UFO::Math
 		UFO::Plan
 		UFO::Vision
-		# imgui
+
+	# imgui
 	PRIVATE
 		glfw_webgpu
 )
@@ -41,8 +41,21 @@ target_include_directories(Viz
 		$<INSTALL_INTERFACE:include>
 )
 
+if(UFO_DEV_MODE)
+	# In dev mode, we load resources from the source tree
+	target_compile_definitions(Viz PUBLIC
+		UFOVIZ_SHADER_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+	)
+else()
+	# In release mode, we just load resources relatively to wherever the
+	# executable is launched from, so that the binary is portable
+	target_compile_definitions(Viz PUBLIC
+		UFOVIZ_SHADER_DIR="./shaders"
+	)
+endif()
+
 if(UFO_BUILD_TESTS OR UFOVIZ_BUILD_TESTS)
-  add_subdirectory(tests)
+	add_subdirectory(tests)
 endif()
 
 if(UFO_BUILD_DOCS OR UFOVIZ_BUILD_DOCS)
@@ -51,16 +64,16 @@ endif()
 
 install(TARGETS Viz glfw_webgpu EXPORT Viz-targets
 	COMPONENT Viz
-	LIBRARY  DESTINATION lib
-	ARCHIVE  DESTINATION lib
-	RUNTIME  DESTINATION bin
-  INCLUDES DESTINATION include
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	RUNTIME DESTINATION bin
+	INCLUDES DESTINATION include
 )
 
 install(EXPORT Viz-targets
-  FILE "Viz-targets.cmake"
-  NAMESPACE UFO::
-  DESTINATION lib/cmake/${PROJECT_NAME}
+	FILE "Viz-targets.cmake"
+	NAMESPACE UFO::
+	DESTINATION lib/cmake/${PROJECT_NAME}
 	COMPONENT Viz
 )
 
@@ -78,11 +91,11 @@ configure_package_config_file(
 )
 
 install(
-  FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/Viz-config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/Viz-config-version.cmake"
+	FILES
+	"${CMAKE_CURRENT_BINARY_DIR}/Viz-config.cmake"
+	"${CMAKE_CURRENT_BINARY_DIR}/Viz-config-version.cmake"
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-  COMPONENT Viz
+	COMPONENT Viz
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include

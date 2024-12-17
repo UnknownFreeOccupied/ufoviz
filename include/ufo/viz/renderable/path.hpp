@@ -32,7 +32,7 @@ class RenderablePath : public Renderable
 	void init(WGPUDevice device) override
 	{
 		triangle_list_.shader_module_ =
-		    compute::loadShaderModule(device, "../../../../lib/viz/shaders/render.wgsl");
+		    compute::loadShaderModule(device, UFOVIZ_SHADER_DIR "/render.wgsl");
 		if (nullptr == triangle_list_.shader_module_) {
 			std::printf("Could not load shader!\n");
 			exit(1);

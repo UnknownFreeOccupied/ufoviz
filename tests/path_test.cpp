@@ -41,8 +41,6 @@ PlanPath<3, float> makeTestPlan()
 
 TEST_CASE("[Viz] Path")
 {
-	using namespace std::chrono_literals;
-
 	Viz v("UFOViz");
 
 	auto path = makeTestPlan();
