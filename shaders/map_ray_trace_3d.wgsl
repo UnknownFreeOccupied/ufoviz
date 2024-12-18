@@ -6,15 +6,26 @@ struct Index {
 const NULL_POS: u32 = ~0u;
 const NULL_INDEX: Index = Index(NULL_POS, 0u);
 
-struct UBO {
+struct Hit {
+  node: Index,
+  distance: f32
+};
+
+struct Sample {
+  step_size: u32,
+  offset: u32
+};
+
+struct Uniform {
   projection: mat4x4f,
   view: mat4x4f,
   dim: vec2u,
   near_clip: f32,
   far_clip: f32,
-  node: Index,
+  @size(16) sample: Sample,
+  @size(16) node: Index,
   node_center: vec3f,
-  node_half_length: f32
+  node_half_length: f32,
 };
 
 struct Code {
@@ -38,8 +49,8 @@ struct ColorBlock {
   color: array<u32, 8>
 };
 
-@group(0) @binding(0) var<storage,read_write> hits: array<Index>;
-@group(0) @binding(1) var<uniform> uniforms: UBO;
+@group(0) @binding(0) var<storage,read_write> hits: array<Hit>;
+@group(0) @binding(1) var<uniform> uniforms: Uniform;
 @group(0) @binding(2) var<storage,read> tree_buffer: array<TreeBlock>;
 @group(0) @binding(3) var<storage,read> occupancy_buffer: array<OccupancyBlock>;
 
@@ -144,7 +155,7 @@ fn parent(node: Index) -> Index {
   return Index(p, o);
 }
 
-fn trace(params: TraceParams) -> Index {
+fn trace(params: TraceParams) -> Hit {
   var node = params.node;
   var t0   = params.t0;
   var t1   = params.t1;
@@ -158,11 +169,11 @@ fn trace(params: TraceParams) -> Index {
   let max_dist = min_t1;
 
   if max_t0 >= min_t1 || uniforms.near_clip > max_dist || uniforms.far_clip < min_dist {
-    return NULL_INDEX;
+    return Hit(NULL_INDEX, -1.0);
   } else if uniforms.near_clip <= max_dist && returnable(node) {
-    return node;
+    return Hit(node, min_dist);
   } else if !traversable(node) {
-    return NULL_INDEX;
+    return Hit(NULL_INDEX, 1.0);
   }
 
   // 32 / (3 + 4) = 4
@@ -223,9 +234,9 @@ fn trace(params: TraceParams) -> Index {
     if uniforms.near_clip > max_dist {
       continue;
     } else if uniforms.far_clip < min_dist {
-      return NULL_INDEX;
+      return Hit(NULL_INDEX, -1.0);
     } else if uniforms.near_clip <= max_dist && returnable(child) {
-      return child;
+      return Hit(child, min_dist);
     } else if !traversable(child) {
       continue;
     }
@@ -244,7 +255,7 @@ fn trace(params: TraceParams) -> Index {
     stack[bucket] |= (next_offset | (prev_offset << 4u)) << pos;
   }
 
-  return NULL_INDEX;
+  return Hit(NULL_INDEX, -1.0);
 }
 
 fn traceInit(node: Index, ray: Ray) -> TraceParams {
@@ -266,20 +277,30 @@ fn traceInit(node: Index, ray: Ray) -> TraceParams {
   return TraceParams(node, t0, t1, a);
 }
 
+fn samplePixel(id: vec2u) -> vec2u {
+  return vec2u(
+    id.x * uniforms.sample.step_size + (uniforms.sample.offset % uniforms.sample.step_size),
+    id.y * uniforms.sample.step_size + (uniforms.sample.offset / uniforms.sample.step_size)
+  );
+}
+
 fn isOffScreen(v: vec2u) -> bool {
   return any(uniforms.dim <= v);
 }
-// TODO: Using pipeline-overridable constants
-// @id(42) override block_width = 8u;
-// @id(42) override block_height = 4u;
+
+// TODO: Use pipeline-overridable constants when implemented in WGPU
+// override block_width = 8u;
+// override block_height = 4u;
 // @compute @workgroup_size(block_width, block_height)
 @compute @workgroup_size(8, 4)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-  if isOffScreen(id.xy) {
+  let pixel = samplePixel(id.xy);
+
+  if isOffScreen(pixel) {
     return;
   }
 
-  let texel = vec2f(id.xy) + vec2f(0.5);
+  let texel = vec2f(pixel) + vec2f(0.5);
 
   let texel_nds = (texel / vec2f(uniforms.dim)) * vec2f(2.0) - vec2f(1.0);
   let p_nds_h = vec4f(texel_nds.x, texel_nds.y, -1.0, 1.0);
@@ -294,5 +315,5 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let params = traceInit(uniforms.node, ray);
 
   // TODO: What should this be?
-  hits[id.x + id.y * uniforms.dim.x] = trace(params);
+  hits[pixel.x + pixel.y * uniforms.dim.x] = trace(params);
 }

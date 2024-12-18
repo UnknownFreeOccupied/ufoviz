@@ -464,7 +464,7 @@ WGPURequiredLimits Viz::requiredLimits(WGPUAdapter adapter) const
 	required.limits.maxComputeInvocationsPerWorkgroup = 32;
 	required.limits.maxComputeWorkgroupsPerDimension  = 31250;
 
-	required.limits.maxUniformBuffersPerShaderStage = 1;
+	// required.limits.maxUniformBuffersPerShaderStage = 1;
 	// TODO: required.limits.maxUniformBufferBindingSize     = sizeof(uniform_);
 
 	required.limits.maxTextureDimension1D            = 4096;

@@ -59,28 +59,59 @@ template <class Map>
 class RenderableMap : public Renderable
 {
  private:
+	struct Sample {
+		std::uint32_t step_size;
+		std::uint32_t offset;
+
+		bool operator==(Sample const& rhs) const
+		{
+			return step_size == rhs.step_size && offset == rhs.offset;
+		}
+
+		bool operator!=(Sample const& rhs) const { return !(*this == rhs); }
+	};
+
 	struct Uniform {
 		Mat4x4f   projection;
 		Mat4x4f   view;
 		Vec2u     dim;
 		float     near_clip;
 		float     far_clip;
-		TreeIndex node;
+		Sample    sample;
 		float     _pad0[2];
+		TreeIndex node;
+		float     _pad1[2];
 		Vec3f     node_center;
 		float     node_half_length;
 
 		bool operator==(Uniform const& rhs) const
 		{
-			return projection == rhs.projection && view == rhs.view && dim == rhs.dim &&
-			       near_clip == rhs.near_clip && far_clip == rhs.far_clip && node == rhs.node &&
-			       node_center == rhs.node_center && node_half_length == rhs.node_half_length;
+			// clang-format off
+			return
+				rhs.projection       == projection &&
+				rhs.view             == view &&
+				rhs.dim              == dim &&
+				rhs.near_clip        == near_clip &&
+				rhs.far_clip         == far_clip &&
+				rhs.sample           == sample &&
+				rhs.node             == node &&
+				rhs.node_center      == node_center &&
+				rhs.node_half_length == node_half_length;
+			// clang-format on
 		}
 
 		bool operator!=(Uniform const& rhs) const { return !(*this == rhs); }
 	};
 	// Have the compiler check byte alignment
 	static_assert(sizeof(Uniform) % 16 == 0);
+
+	struct Hit {
+		TreeIndex node;
+		float     distance;
+		float     _pad0;
+	};
+	// Have the compiler check byte alignment
+	static_assert(sizeof(Hit) % 16 == 0);
 
  public:
 	RenderableMap(Map const& map)  // : map_(map)
@@ -138,18 +169,78 @@ class RenderableMap : public Renderable
 			uniform_ = uniform;
 			hits_.resize(uniform.dim.x * uniform.dim.y);
 
-			hits_buffer_ =
-			    compute::createBuffer(map_.gpuDevice(), hits_.size() * sizeof(TreeIndex),
-			                          WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc, false);
+			if (nullptr != hits_staging_buffer_) {
+				wgpuBufferRelease(hits_staging_buffer_);
+			}
+
+			if (nullptr != hits_storage_buffer_) {
+				wgpuBufferRelease(hits_storage_buffer_);
+			}
 
 			if (nullptr != compute_bind_group_) {
 				wgpuBindGroupRelease(compute_bind_group_);
 			}
 
+			hits_staging_buffer_ = compute::createBuffer(
+			    map_.gpuDevice(), hits_.size() * sizeof(typename decltype(hits_)::value_type),
+			    WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst, false);
+
+			hits_storage_buffer_ = compute::createBuffer(
+			    map_.gpuDevice(), hits_.size() * sizeof(typename decltype(hits_)::value_type),
+			    WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc, false);
+
 			compute_bind_group_ = createBindGroup(device);
 		}
 
-		// TODO: Implement
+		WGPUComputePassEncoder compute_pass_encoder =
+		    wgpuCommandEncoderBeginComputePass(encoder, nullptr);
+
+		wgpuComputePassEncoderSetPipeline(compute_pass_encoder, compute_pipeline_);
+		wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, compute_bind_group_, 0,
+		                                   nullptr);
+
+		std::uint32_t invocation_count_x = uniform.dim.x / uniform_.sample.step_size;
+		std::uint32_t invocation_count_y = uniform.dim.y / uniform_.sample.step_size;
+
+		// TODO: Do not hardcode here
+		std::uint32_t workgroup_size_x = 8;
+		std::uint32_t workgroup_size_y = 4;
+		std::uint32_t workgroup_count_x =
+		    (invocation_count_x + workgroup_size_x - 1) / workgroup_size_x;
+		std::uint32_t workgroup_count_y =
+		    (invocation_count_y + workgroup_size_y - 1) / workgroup_size_y;
+
+		wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, workgroup_count_x,
+		                                         workgroup_count_y, 1);
+
+		wgpuComputePassEncoderEnd(compute_pass_encoder);
+		wgpuComputePassEncoderRelease(compute_pass_encoder);
+
+		wgpuCommandEncoderCopyBufferToBuffer(
+		    encoder, hits_storage_buffer_, 0, hits_staging_buffer_, 0,
+		    hits_.size() * sizeof(typename decltype(hits_)::value_type));
+
+		WGPUCommandBuffer command_buffer = wgpuCommandEncoderFinish(encoder, nullptr);
+		assert(command_buffer);
+
+		wgpuQueueSubmit(map_.gpuQueue(), 1, &command_buffer);
+
+		// wgpuBufferMapAsync(hits_staging_buffer_, WGPUMapMode_Read, 0,
+		//                    hits_.size() * sizeof(typename decltype(hits_)::value_type),
+		//                    handle_buffer_map, nullptr);
+		// wgpuDevicePoll(device, true, NULL);
+
+		Hit* buf = static_cast<Hit*>(wgpuBufferGetMappedRange(
+		    hits_staging_buffer_, 0,
+		    hits_.size() * sizeof(typename decltype(hits_)::value_type)));
+		assert(buf);
+
+		std::memcpy(hits_.data(), buf,
+		            hits_.size() * sizeof(typename decltype(hits_)::value_type));
+
+		wgpuBufferUnmap(hits_staging_buffer_);
+		wgpuCommandBufferRelease(command_buffer);
+		// wgpuCommandEncoderRelease(command_encoder);
 	}
 
 	void onGui() override
@@ -253,9 +344,9 @@ class RenderableMap : public Renderable
 		// Hits buffer
 		binding[0].nextInChain = nullptr;
 		binding[0].binding     = 0;
-		binding[0].buffer      = hits_buffer_;
+		binding[0].buffer      = hits_storage_buffer_;
 		binding[0].offset      = 0;
-		binding[0].size        = hits_.size() * sizeof(TreeIndex);
+		binding[0].size        = hits_.size() * sizeof(typename decltype(hits_)::value_type);
 
 		// Uniform
 		binding[1].nextInChain = nullptr;
@@ -309,12 +400,13 @@ class RenderableMap : public Renderable
 	WGPUComputePipeline compute_pipeline_          = nullptr;
 	WGPUBindGroup       compute_bind_group_        = nullptr;
 
-	WGPUBuffer hits_buffer_    = nullptr;
-	WGPUBuffer uniform_buffer_ = nullptr;
+	WGPUBuffer hits_staging_buffer_ = nullptr;
+	WGPUBuffer hits_storage_buffer_ = nullptr;
+	WGPUBuffer uniform_buffer_      = nullptr;
 
 	Uniform uniform_;
 
-	std::vector<TreeIndex> hits_;
+	std::vector<Hit> hits_;
 };
 }  // namespace ufo
 
