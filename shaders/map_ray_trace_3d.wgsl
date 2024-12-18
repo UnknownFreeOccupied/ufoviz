@@ -269,7 +269,10 @@ fn traceInit(node: Index, ray: Ray) -> TraceParams {
 fn isOffScreen(v: vec2u) -> bool {
   return any(uniforms.dim <= v);
 }
-
+// TODO: Using pipeline-overridable constants
+// @id(42) override block_width = 8u;
+// @id(42) override block_height = 4u;
+// @compute @workgroup_size(block_width, block_height)
 @compute @workgroup_size(8, 4)
 fn main(@builtin(global_invocation_id) id: vec3u) {
   if isOffScreen(id.xy) {
