@@ -24,8 +24,8 @@ endif()
 # # set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE ON)
 
 add_executable(ufoviz_tests
-	# map_test.cpp
-	path_test.cpp
+	map_test.cpp
+	# path_test.cpp
 	# viz_test.cpp
 )
 

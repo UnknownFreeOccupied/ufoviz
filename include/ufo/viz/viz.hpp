@@ -49,7 +49,7 @@
 
 // STL
 #include <mutex>
-#include <set>
+#include <vector>
 #include <string>
 #include <thread>
 
@@ -94,9 +94,9 @@ class Viz
 
 	[[nodiscard]] WGPUDevice device() const;
 
-	void addRenderable(std::shared_ptr<Renderable> const& renderable);
+	void addRenderable(Renderable const& renderable);
 
-	void eraseRenderable(std::shared_ptr<Renderable> const& renderable);
+	// void eraseRenderable(std::shared_ptr<Renderable> const& renderable);
 
 	void clearRenderable();
 
@@ -152,7 +152,7 @@ class Viz
 	float prev_time_{};
 
 	std::mutex                            renderables_mutex_;
-	std::set<std::shared_ptr<Renderable>> renderables_;
+	std::vector<std::unique_ptr<Renderable>> renderables_;
 
 	Camera     camera_;
 	ufo::Vec2f angles_{0.0f, 0.0f};

@@ -119,15 +119,21 @@ class RenderableMap : public Renderable
 		// TODO: Implement
 	}
 
+	RenderableMap(RenderableMap const& other)  // TODO: Implement
+	{
+		// TODO: Implement
+	}
+
 	~RenderableMap() override = default;
 
 	void init(WGPUDevice device, WGPUTextureFormat texture_format) override
 	{
-		compute_bind_group_layout_ = createBindGroupLayout(device, texture_format);
-		compute_pipeline_layout_   = createPipelineLayout(device, compute_bind_group_layout_);
-		compute_pipeline_          = createComputePipeline(device, compute_pipeline_layout_);
-
 		map_.gpuInit(device);
+
+		compute_bind_group_layout_ = createBindGroupLayout(map_.gpuDevice(), texture_format);
+		compute_pipeline_layout_ =
+		    createPipelineLayout(map_.gpuDevice(), compute_bind_group_layout_);
+		compute_pipeline_ = createComputePipeline(map_.gpuDevice(), compute_pipeline_layout_);
 
 		uniform_buffer_ =
 		    compute::createBuffer(map_.gpuDevice(), sizeof(uniform_),
@@ -163,11 +169,15 @@ class RenderableMap : public Renderable
 	{
 		Uniform uniform = createUniform(map_, camera);
 
-		if (uniform_ != uniform) {
-			map_.gpuUpdateBuffers();
+		// TODO: This should return number of bytes that should be written, so we can know if
+		// the map has changed and so we can estimate how much time it will take to transfer
+		// the data
+		map_.gpuUpdateBuffers();
 
+		if (uniform_ != uniform) {
 			uniform_ = uniform;
-			hits_.resize(uniform.dim.x * uniform.dim.y);
+			hits_node_.resize(uniform.dim.x * uniform.dim.y);
+			hits_depth_.resize(uniform.dim.x * uniform.dim.y);
 
 			if (nullptr != hits_staging_buffer_) {
 				wgpuBufferRelease(hits_staging_buffer_);
@@ -181,13 +191,15 @@ class RenderableMap : public Renderable
 				wgpuBindGroupRelease(compute_bind_group_);
 			}
 
-			hits_staging_buffer_ = compute::createBuffer(
-			    map_.gpuDevice(), hits_.size() * sizeof(typename decltype(hits_)::value_type),
-			    WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst, false);
+			// hits_staging_buffer_ = compute::createBuffer(
+			//     map_.gpuDevice(), hits_.size() * sizeof(typename
+			//     decltype(hits_)::value_type), WGPUBufferUsage_MapRead |
+			//     WGPUBufferUsage_CopyDst, false);
 
-			hits_storage_buffer_ = compute::createBuffer(
-			    map_.gpuDevice(), hits_.size() * sizeof(typename decltype(hits_)::value_type),
-			    WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc, false);
+			// hits_storage_buffer_ = compute::createBuffer(
+			//     map_.gpuDevice(), hits_.size() * sizeof(typename
+			//     decltype(hits_)::value_type), WGPUBufferUsage_Storage |
+			//     WGPUBufferUsage_CopySrc, false);
 
 			compute_bind_group_ = createBindGroup(device);
 		}
@@ -216,9 +228,9 @@ class RenderableMap : public Renderable
 		wgpuComputePassEncoderEnd(compute_pass_encoder);
 		wgpuComputePassEncoderRelease(compute_pass_encoder);
 
-		wgpuCommandEncoderCopyBufferToBuffer(
-		    encoder, hits_storage_buffer_, 0, hits_staging_buffer_, 0,
-		    hits_.size() * sizeof(typename decltype(hits_)::value_type));
+		// wgpuCommandEncoderCopyBufferToBuffer(
+		//     encoder, hits_storage_buffer_, 0, hits_staging_buffer_, 0,
+		//     hits_.size() * sizeof(typename decltype(hits_)::value_type));
 
 		WGPUCommandBuffer command_buffer = wgpuCommandEncoderFinish(encoder, nullptr);
 		assert(command_buffer);
@@ -230,13 +242,13 @@ class RenderableMap : public Renderable
 		//                    handle_buffer_map, nullptr);
 		// wgpuDevicePoll(device, true, NULL);
 
-		Hit* buf = static_cast<Hit*>(wgpuBufferGetMappedRange(
-		    hits_staging_buffer_, 0,
-		    hits_.size() * sizeof(typename decltype(hits_)::value_type)));
-		assert(buf);
+		// Hit* buf = static_cast<Hit*>(wgpuBufferGetMappedRange(
+		//     hits_staging_buffer_, 0,
+		//     hits_.size() * sizeof(typename decltype(hits_)::value_type)));
+		// assert(buf);
 
-		std::memcpy(hits_.data(), buf,
-		            hits_.size() * sizeof(typename decltype(hits_)::value_type));
+		// std::memcpy(hits_.data(), buf,
+		//             hits_.size() * sizeof(typename decltype(hits_)::value_type));
 
 		wgpuBufferUnmap(hits_staging_buffer_);
 		wgpuCommandBufferRelease(command_buffer);
@@ -247,6 +259,8 @@ class RenderableMap : public Renderable
 	{
 		// TODO: Implement
 	}
+
+	[[nodiscard]] RenderableMap* clone() const override { return new RenderableMap(*this); }
 
  private:
 	[[nodiscard]] WGPUBindGroupLayout createBindGroupLayout(
@@ -346,7 +360,8 @@ class RenderableMap : public Renderable
 		binding[0].binding     = 0;
 		binding[0].buffer      = hits_storage_buffer_;
 		binding[0].offset      = 0;
-		binding[0].size        = hits_.size() * sizeof(typename decltype(hits_)::value_type);
+		// binding[0].size        = hits_.size() * sizeof(typename
+		// decltype(hits_)::value_type);
 
 		// Uniform
 		binding[1].nextInChain = nullptr;
@@ -381,8 +396,8 @@ class RenderableMap : public Renderable
 	[[nodiscard]] static Uniform createUniform(Map const& map, Camera const& camera)
 	{
 		Uniform uniform;
-		uniform.projection       = inverse(camera.projectionPerspective());
-		uniform.view             = inverse(Mat4x4f(camera.pose));
+		uniform.projection       = inverse(camera.projection());
+		uniform.view             = inverse(camera.view());
 		uniform.dim              = Vec2u(camera.cols, camera.rows);
 		uniform.near_clip        = camera.near_clip;
 		uniform.far_clip         = camera.far_clip;
@@ -404,9 +419,13 @@ class RenderableMap : public Renderable
 	WGPUBuffer hits_storage_buffer_ = nullptr;
 	WGPUBuffer uniform_buffer_      = nullptr;
 
+	WGPUTexture     texture_      = nullptr;
+	WGPUTextureView texture_view_ = nullptr;
+
 	Uniform uniform_;
 
-	std::vector<Hit> hits_;
+	std::vector<TreeIndex> hits_node_;
+	std::vector<float>     hits_depth_;
 };
 }  // namespace ufo
 

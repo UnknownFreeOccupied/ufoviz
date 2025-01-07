@@ -44,7 +44,7 @@ TEST_CASE("[Viz] Path")
 	Viz v("UFOViz");
 
 	auto path = makeTestPlan();
-	v.addRenderable(std::make_shared<RenderablePath>(path, Color(255, 0, 0), 0.2f, 16));
+	v.addRenderable(RenderablePath(path, Color(255, 0, 0), 0.2f, 16));
 
 	v.run();
 }

@@ -57,6 +57,11 @@ class RenderablePath : public Renderable
 		// TODO: Implement
 	}
 
+	[[nodiscard]] RenderablePath* clone() const override
+	{
+		return new RenderablePath(*this);
+	}
+
  private:
 	RenderableTrianglelist  triangle_list_;
 	ufo::PlanPath<3, float> plan_;

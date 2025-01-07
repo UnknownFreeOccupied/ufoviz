@@ -18,7 +18,7 @@ TEST_CASE("[Viz] Map")
 
 	Map3D<OccupancyMap, ColorMap> map;
 
-	v.addRenderable(std::make_unique<RenderableMap<decltype(map)>>(map));
+	v.addRenderable(RenderableMap(map));
 
 	v.run();
 }

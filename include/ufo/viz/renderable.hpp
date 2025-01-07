@@ -62,6 +62,8 @@ class Renderable
 	                    Camera const& camera) = 0;
 
 	virtual void onGui() = 0;
+
+	virtual Renderable* clone() const = 0;
 };
 }  // namespace ufo
 

@@ -267,23 +267,23 @@ WGPUAdapter Viz::adapter() const { return adapter_; }
 
 WGPUDevice Viz::device() const { return device_; }
 
-void Viz::addRenderable(std::shared_ptr<Renderable> const& renderable)
+void Viz::addRenderable(Renderable const& renderable)
 {
 	std::scoped_lock lock(renderables_mutex_);
-	renderables_.insert(renderable);
+	auto&            r = renderables_.emplace_back(renderable.clone());
 
 	if (nullptr != device_) {
-		renderable->init(device_, surface_capa_.formats[0]);
+		r->init(device_, surface_capa_.formats[0]);
 	}
 }
 
-void Viz::eraseRenderable(std::shared_ptr<Renderable> const& renderable)
-{
-	std::scoped_lock lock(renderables_mutex_);
-	renderables_.erase(renderable);
+// void Viz::eraseRenderable(std::shared_ptr<Renderable> const& renderable)
+// {
+// 	std::scoped_lock lock(renderables_mutex_);
+// 	renderables_.erase(renderable);
 
-	renderable->release();
-}
+// 	renderable->release();
+// }
 
 void Viz::clearRenderable()
 {

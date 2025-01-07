@@ -49,10 +49,11 @@ struct ColorBlock {
   color: array<u32, 8>
 };
 
-@group(0) @binding(0) var<storage,read_write> hits: array<Hit>;
-@group(0) @binding(1) var<uniform> uniforms: Uniform;
-@group(0) @binding(2) var<storage,read> tree_buffer: array<TreeBlock>;
-@group(0) @binding(3) var<storage,read> occupancy_buffer: array<OccupancyBlock>;
+@group(0) @binding(0) var<storage,read_write> hits_node: array<Hit>;
+@group(0) @binding(1) var<storage,read_write> hits_depth: array<Hit>;
+@group(0) @binding(2) var<uniform> uniforms: Uniform;
+@group(0) @binding(3) var<storage,read> tree_buffer: array<TreeBlock>;
+@group(0) @binding(4) var<storage,read> occupancy_buffer: array<OccupancyBlock>;
 
 struct Ray {
   origin: vec3f,
