@@ -396,14 +396,14 @@ class RenderableMap : public Renderable
 	[[nodiscard]] static Uniform createUniform(Map const& map, Camera const& camera)
 	{
 		Uniform uniform;
-		uniform.projection       = inverse(camera.projection());
-		uniform.view             = inverse(camera.view());
-		uniform.dim              = Vec2u(camera.cols, camera.rows);
-		uniform.near_clip        = camera.near_clip;
-		uniform.far_clip         = camera.far_clip;
-		uniform.node             = map.index();
-		uniform.node_center      = map.center(uniform.node);
-		uniform.node_half_length = map.halfLength(uniform.node);
+		uniform.projection  = inverse(camera.projection());
+		uniform.view        = inverse(camera.view());
+		uniform.dim         = Vec2u(camera.cols, camera.rows);
+		uniform.near_clip   = camera.near_clip;
+		uniform.far_clip    = camera.far_clip;
+		uniform.node        = map.index();
+		uniform.node_center = map.center(uniform.node);
+		// FIXME: uniform.node_half_length = map.halfLength(uniform.node);
 		return uniform;
 	}
 
