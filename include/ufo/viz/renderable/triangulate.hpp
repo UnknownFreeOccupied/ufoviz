@@ -7,10 +7,10 @@
 #include <vector>
 
 // UFO
-#include <ufo/geometry/shape/bs.hpp>
-#include <ufo/geometry/shape/cone.hpp>
-#include <ufo/geometry/shape/cylinder.hpp>
-#include <ufo/geometry/shape/line_segment.hpp>
+#include <ufo/geometry/cone.hpp>
+#include <ufo/geometry/cylinder.hpp>
+#include <ufo/geometry/line_segment.hpp>
+#include <ufo/geometry/sphere.hpp>
 #include <ufo/math/vec3.hpp>
 #include <ufo/plan/graph.hpp>
 #include <ufo/plan/path.hpp>
@@ -366,15 +366,17 @@ inline TriangleList<ufo::Vec3f> triangulate(ufo::Cone3 const& cone, int segments
 }
 
 template <class Vertex>
-inline TriangleList<Vertex> triangulate(ufo::LineSegment3 const& ls, int segments, float radius)
+inline TriangleList<Vertex> triangulate(ufo::LineSegment3 const& ls, int segments,
+                                        float radius)
 {
 	ufo::Cylinder3 cylinder(ls.start, ls.end, radius);
 	return triangulate<Vertex>(cylinder, segments);
 }
 
 template <class Vertex>
-inline TriangleList<Vertex> triangulateArrow(ufo::Vec3f start, ufo::Vec3f tip_end, float radius,
-                                      float tip_height, int num_slices)
+inline TriangleList<Vertex> triangulateArrow(ufo::Vec3f start, ufo::Vec3f tip_end,
+                                             float radius, float tip_height,
+                                             int num_slices)
 {
 	TriangleList<Vertex> result;
 
@@ -400,10 +402,10 @@ inline TriangleList<Vertex> triangulateArrow(ufo::Vec3f start, ufo::Vec3f tip_en
 }
 
 template <class Vertex>
-inline TriangleList<Vertex> triangulate(ufo::PlanGraph<3, float> const& graph, float node_radius,
-                                 float edge_radius, int segments,
-                                 bool  edge_as_arrow     = false,
-                                 float arrow_head_length = 0.0f)
+inline TriangleList<Vertex> triangulate(ufo::PlanGraph<3, float> const& graph,
+                                        float node_radius, float edge_radius,
+                                        int segments, bool edge_as_arrow = false,
+                                        float arrow_head_length = 0.0f)
 {
 	// TODO maybe separate Nodes and edges for easier coloring
 
@@ -446,8 +448,8 @@ inline TriangleList<Vertex> triangulate(ufo::PlanGraph<3, float> const& graph, f
 
 template <class Vertex>
 inline TriangleList<Vertex> triangulate(ufo::PlanPath<3, float> const& path, float radius,
-                                 int segments, bool use_arrow = true,
-                                 float arrow_head_height = 0.5f)
+                                        int segments, bool use_arrow = true,
+                                        float arrow_head_height = 0.5f)
 {
 	TriangleList<Vertex> result;
 

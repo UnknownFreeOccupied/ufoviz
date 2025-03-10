@@ -44,7 +44,7 @@
 
 // UFO
 #include <ufo/compute/compute.hpp>
-#include <ufo/map/tree/map.hpp>
+#include <ufo/map/map/map.hpp>
 #include <ufo/utility/type_traits.hpp>
 #include <ufo/vision/camera.hpp>
 #include <ufo/viz/renderable.hpp>
